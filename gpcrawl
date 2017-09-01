@@ -1,15 +1,119 @@
 #!/usr/bin/env python
 
 import sys
+import psycopg2
+import datetime
+import locale
+
 sys.path.append ('googleplay_api')
 from googleplay import GooglePlayAPI, LoginError
 
 class GPCrawl:
 
-    def __init__(self, tokenfile, androidid, lang):
+    def __init__(self, tokenfile, androidid, dbname, user, destroy_data = False):
+
+        # Set locale such that parsing of download numbers works. Note, that
+        # this must be changed consistently with the lang value below.
+        locale.setlocale(locale.LC_ALL, 'en_US.utf8')
+
         token = open(tokenfile, 'r').read()
-        self.api = GooglePlayAPI(androidId = androidid, lang = lang)
+        self.api = GooglePlayAPI(androidId = androidid, lang = 'en_us')
         self.api.login(None, None, token)
 
-gpc = GPCrawl (tokenfile = 'token.dat', androidid = '3d716411bf8bc802', lang = 'en_us')
-print(str(gpc.api.search ("aa", nb_results=200).doc))
+        self.conn = psycopg2.connect('dbname=%s user=%s' % (dbname, user))
+        self.cur = self.conn.cursor()
+
+        if destroy_data:
+            self.cur.execute ('DROP TABLE apps');
+
+        # Create database:
+        #   sudo -u postgres createdb google_play_test
+        table = '''
+            CREATE TABLE IF NOT EXISTS apps
+            (
+                search                              TEXT,
+                docid                               TEXT,
+                title                               TEXT,
+                creator                             TEXT,
+                offer_micros                        INTEGER,
+                offer_currencyCode                  TEXT,
+                offer_formatedAmount                TEXT,
+                offer_checkoutFlowRequired          BOOLEAN,
+                offer_offerType                     INTEGER,
+                details_appDetails_versionCode      INTEGER,
+                details_appDetails_installationSize INTEGER,
+                details_appDetails_numDownloads     INTEGER,
+                details_appDetails_packageName      TEXT,
+                details_appDetails_uploadDate       TEXT,
+                details_appDetails_file_fileType    INTEGER,
+                details_appDetails_file_versionCode INTEGER,
+                details_appDetails_file_size        INTEGER,
+                aggregateRating_type                INTEGER,
+                aggregateRating_starRating          REAL,
+                aggregateRating_ratingsCount        INTEGER,
+                aggregateRating_oneStarRating       INTEGER,
+                aggregateRating_twoStarRating       INTEGER,
+                aggregateRating_threeStarRating     INTEGER,
+                aggregateRating_fourStarRating      INTEGER,
+                aggregateRating_fiveStarRating      INTEGER,
+                aggregateRating_commentCount        INTEGER,
+                detailsUrl                          TEXT,
+                sharesUrl                           TEXT,
+                detailsReusable                     BOOLEAN,
+                PRIMARY KEY(details_appDetails_packageName, details_appDetails_versionCode)
+            )
+        '''
+        self.cur.execute(table)
+        self.conn.commit()
+
+    def search(self, query):
+        results = gpc.api.search (query, nb_results=200)
+        for docs in results.doc:
+            for result in docs.child:
+
+                ad = result.details.appDetails
+                of = result.offer[0]
+
+                upload_date   = datetime.datetime.strptime(ad.uploadDate, "%b %d, %Y")
+                num_downloads = locale.atoi(ad.numDownloads.rstrip('+'))
+                querystring = '''
+                    INSERT INTO apps VALUES 
+                        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                         %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT DO NOTHING
+                '''
+
+                self.cur.execute(querystring,
+                    (query,
+                     result.docid,
+                     result.title,
+                     result.creator,
+                     of.micros,
+                     of.currencyCode,
+                     of.formattedAmount,
+                     of.checkoutFlowRequired,
+                     of.offerType,
+                     ad.versionCode,
+                     ad.installationSize,
+                     num_downloads,
+                     ad.packageName,
+                     upload_date.date(),
+                     ad.file[0].fileType,
+                     ad.file[0].versionCode,
+                     ad.file[0].size,
+                     result.aggregateRating.type,
+                     result.aggregateRating.starRating,
+                     result.aggregateRating.ratingsCount,
+                     result.aggregateRating.oneStarRatings,
+                     result.aggregateRating.twoStarRatings,
+                     result.aggregateRating.threeStarRatings,
+                     result.aggregateRating.fourStarRatings,
+                     result.aggregateRating.fiveStarRatings,
+                     result.aggregateRating.commentCount,
+                     result.detailsUrl,
+                     result.shareUrl,
+                     result.detailsReusable))
+        self.conn.commit()
+
+gpc = GPCrawl (tokenfile = 'token.dat', androidid = '3d716411bf8bc802', dbname = 'google_play_test', user = 'alex')
+gpc.search('aa')
