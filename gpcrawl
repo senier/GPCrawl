@@ -60,6 +60,8 @@ class GPCrawl:
                 detailsUrl                          TEXT,
                 sharesUrl                           TEXT,
                 detailsReusable                     BOOLEAN,
+                duplicates                          INTEGER,
+                crawlDate                           TIMESTAMP,
                 PRIMARY KEY(details_appDetails_packageName, details_appDetails_versionCode)
             )
         '''
@@ -78,9 +80,11 @@ class GPCrawl:
                 num_downloads = locale.atoi(ad.numDownloads.rstrip('+'))
                 querystring = '''
                     INSERT INTO apps VALUES 
-                        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                         %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                    ON CONFLICT DO NOTHING
+                        (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                         %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (details_appDetails_packageName, details_appDetails_versionCode)
+                        DO UPDATE
+                            SET duplicates = apps.duplicates + 1, crawlDate = now()
                 '''
 
                 self.cur.execute(querystring,
@@ -112,7 +116,9 @@ class GPCrawl:
                      result.aggregateRating.commentCount,
                      result.detailsUrl,
                      result.shareUrl,
-                     result.detailsReusable))
+                     result.detailsReusable,
+                     0,
+                     'now()'))
         self.conn.commit()
 
 gpc = GPCrawl (tokenfile = 'token.dat', androidid = '3d716411bf8bc802', dbname = 'google_play_test', user = 'alex')
