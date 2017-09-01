@@ -10,7 +10,7 @@ from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
 from google.protobuf import text_format
 from google.protobuf.message import Message, DecodeError
 
-import googleplay_api.googleplay_pb2
+import googleplay_pb2
 
 s = requests.Session()
 ssl_verify="/etc/ssl/certs/ca-certificates.crt"
