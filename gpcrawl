@@ -76,6 +76,7 @@ class GPCrawl:
 
     def search(self, query):
 
+        num_results = 0
         sleeptime = 30
 
         while True:
@@ -89,6 +90,8 @@ class GPCrawl:
 
         for docs in results.doc:
             for result in docs.child:
+
+                num_results += 1
 
                 ad = result.details.appDetails
                 of = result.offer[0]
@@ -137,12 +140,14 @@ class GPCrawl:
                      0,
                      'now()'))
         self.conn.commit()
+        return num_results
 
     def seed (self, length):
         for run in (1,2):
             for query in enumchar(length, string.ascii_lowercase):
                 print ("Run %d: searching '%s'" % (run, query))
-                self.search(query)
+                results = self.search(query)
+                print ("... Got %d results" % (results))
 
 gpc = GPCrawl (tokenfile = 'token.dat', androidid = '3d716411bf8bc802', dbname = 'google_play_test', user = 'alex')
 gpc.seed(3)
