@@ -48,12 +48,8 @@ class GooglePlayAPI(object):
     ACCOUNT_TYPE_HOSTED_OR_GOOGLE = "HOSTED_OR_GOOGLE"
     authSubToken = None
 
-    def __init__(self, androidId=None, lang=None, debug=False): # you must use a device-associated androidId value
+    def __init__(self, androidId, lang, debug=False): # you must use a device-associated androidId value
         self.preFetch = {}
-        if androidId == None:
-            androidId = config.ANDROID_ID
-        if lang == None:
-            lang = config.LANG
         self.androidId = androidId
         self.lang = lang
         self.debug = debug
@@ -97,7 +93,6 @@ class GooglePlayAPI(object):
     def setAuthSubToken(self, authSubToken):
         self.authSubToken = authSubToken
 
-        # put your auth token in config.py to avoid multiple login requests
         if self.debug:
             print ("authSubToken: " + authSubToken)
 
