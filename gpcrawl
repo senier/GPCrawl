@@ -2,11 +2,14 @@
 
 import sys
 sys.path.append ('googleplay_api')
-
 from googleplay import GooglePlayAPI, LoginError
 
-token = open('token.dat', 'r').read()
-api = GooglePlayAPI(androidId = "3d716411bf8bc802", lang = "en_US")
-api.login(None, None, token)
+class GPCrawl:
 
-print(str(api.search ("aa", nb_results=200).doc))
+    def __init__(self, tokenfile, androidid, lang):
+        token = open(tokenfile, 'r').read()
+        self.api = GooglePlayAPI(androidId = androidid, lang = lang)
+        self.api.login(None, None, token)
+
+gpc = GPCrawl (tokenfile = 'token.dat', androidid = '3d716411bf8bc802', lang = 'en_us')
+print(str(gpc.api.search ("aa", nb_results=200).doc))
