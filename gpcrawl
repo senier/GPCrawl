@@ -4,9 +4,14 @@ import sys
 import psycopg2
 import datetime
 import locale
+import string
 
 sys.path.append ('googleplay_api')
 from googleplay import GooglePlayAPI, LoginError
+
+def enumchar (level, aset):
+    if level < 2: return aset
+    return [val + newval for newval in aset for val in enumchar(level-1,aset)]
 
 class GPCrawl:
 
@@ -121,5 +126,10 @@ class GPCrawl:
                      'now()'))
         self.conn.commit()
 
+    def seed (self, length):
+        for query in enumchar(length, string.ascii_lowercase):
+            print ("Searching " + query)
+            self.search(query)
+
 gpc = GPCrawl (tokenfile = 'token.dat', androidid = '3d716411bf8bc802', dbname = 'google_play_test', user = 'alex')
-gpc.search('aa')
+gpc.seed(3)
