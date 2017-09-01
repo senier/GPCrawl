@@ -127,9 +127,10 @@ class GPCrawl:
         self.conn.commit()
 
     def seed (self, length):
-        for query in enumchar(length, string.ascii_lowercase):
-            print ("Searching " + query)
-            self.search(query)
+        for run in (1,2):
+            for query in enumchar(length, string.ascii_lowercase):
+                print ("Run %d: searching '%s'" % (run, query))
+                self.search(query)
 
 gpc = GPCrawl (tokenfile = 'token.dat', androidid = '3d716411bf8bc802', dbname = 'google_play_test', user = 'alex')
 gpc.seed(3)
