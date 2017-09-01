@@ -5,6 +5,7 @@ import psycopg2
 import datetime
 import locale
 import string
+import time
 
 sys.path.append ('googleplay_api')
 from googleplay import GooglePlayAPI, LoginError
@@ -74,7 +75,18 @@ class GPCrawl:
         self.conn.commit()
 
     def search(self, query):
-        results = gpc.api.search (query, nb_results=200)
+
+        sleeptime = 30
+
+        while True:
+            try:
+                results = gpc.api.search (query, nb_results=200)
+                break
+            except IndexError:
+                print ("Invalid result, sleeping for %d seconds" % (sleeptime))
+                time.sleep (sleeptime)
+                sleeptime *= 2
+
         for docs in results.doc:
             for result in docs.child:
 
