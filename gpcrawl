@@ -98,6 +98,8 @@ class GPCrawl:
             if self.verbose:
                 print ("Fetching token from '%s'" % (self.tokenurl,))
             self.token = urllib2.urlopen(self.tokenurl).read()
+        if self.verbose:
+            print ("Logging in with token '%s'" % (self.token,))
         self.api.login(None, None, self.token)
 
     def mark_cached(self, searchterm):
@@ -242,8 +244,13 @@ class GPCrawl:
                 self.search(query)
 
     def creator(self):
+        creator_num = 0
         self.cur.execute('SELECT DISTINCT creator FROM apps')
-        for (creator,) in self.cur.fetchall():
+        creators = self.cur.fetchall()
+        for (creator,) in creators:
+            creator_num += 1
+            if self.verbose:
+                print ("Searching creator %d/%d: '%s'" % (creator_num, len(creators), creator))
             self.search(creator)
 
 def main():
