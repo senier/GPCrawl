@@ -166,8 +166,8 @@ class GPCrawl:
             try:
                 results = self.api.search (query, nb_results=200)
                 break
-            except IndexError:
-                print ("Invalid result, sleeping for %d seconds" % (sleeptime))
+            except:
+                print ("Query error, sleeping for %d seconds" % (sleeptime))
                 time.sleep (sleeptime)
                 self.login(self.refresh_token_after <= sleeptime)
                 sleeptime *= 2
