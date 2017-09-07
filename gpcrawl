@@ -7,6 +7,7 @@ import locale
 import string
 import time
 import argparse
+import urllib2
 
 sys.path.append ('googleplay_api')
 from googleplay import GooglePlayAPI, LoginError
@@ -17,11 +18,12 @@ def enumchar (level, aset):
 
 class GPCrawl:
 
-    def __init__(self, tokenfile, androidid, dbname, user, destroy_data = False, max_cached = 1, verbose = False, terminate = 0):
+    def __init__(self, androidid, dbname, user, tokenurl, destroy_data = False, max_cached = 1, verbose = False, terminate = 0):
 
         self.max_cached = max_cached
         self.verbose = verbose
         self.terminate = terminate
+        self.tokenurl = tokenurl
 
         self.num_unsuccessful = 0
 
@@ -29,9 +31,7 @@ class GPCrawl:
         # this must be changed consistently with the lang value below.
         locale.setlocale(locale.LC_ALL, 'en_US.utf8')
 
-        token = open(tokenfile, 'r').read()
         self.api = GooglePlayAPI(androidId = androidid, lang = 'en_us')
-        self.api.login(None, None, token)
 
         self.conn = psycopg2.connect('dbname=%s user=%s' % (dbname, user))
         self.cur = self.conn.cursor()
@@ -92,6 +92,10 @@ class GPCrawl:
 
         self.conn.commit()
 
+    def login(self):
+        token = urllib2.urlopen(self.tokenurl).read()
+        self.api.login(None, None, token)
+
     def mark_cached(self, searchterm):
 
         querystring = '''
@@ -139,7 +143,7 @@ class GPCrawl:
     def search(self, query):
 
         num_results = 0
-        sleeptime = 30
+        sleeptime = 15
 
         num_cached = self.cached (query)
         if  num_cached >= self.max_cached:
@@ -157,6 +161,7 @@ class GPCrawl:
             except IndexError:
                 print ("Invalid result, sleeping for %d seconds" % (sleeptime))
                 time.sleep (sleeptime)
+                self.login()
                 sleeptime *= 2
 
         for docs in results.doc:
@@ -245,11 +250,13 @@ def main():
     parser.add_argument('-C', '--creator', action='store_true', help='Extend database by creator')
     parser.add_argument('-s', '--search', action='store', help='Search for term')
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Verbose output')
-    parser.add_argument('-c', '--cache', action='store', default=2, help='How often to query before considering data cached')
+    parser.add_argument('-c', '--cache', action='store', default=2, type=int, help='How often to query before considering data cached')
+    parser.add_argument('-t', '--token', action='store', default="file:///etc/gpcraw/token.dat", help='URL to fetch token from (may be file://)')
     args = parser.parse_args()
 
     # FIXME: Make db name, user, token file and Android ID configurable
-    gpc = GPCrawl (tokenfile = 'token.dat', androidid = '3d716411bf8bc802', dbname = 'google_play_test', user = 'alex', verbose = args.verbose, max_cached = args.cache, terminate = args.terminate)
+    gpc = GPCrawl (androidid = '3d716411bf8bc802', dbname = 'google_play_test', user = 'alex', tokenurl = args.token, verbose = args.verbose, max_cached = args.cache, terminate = args.terminate)
+    gpc.login()
 
     if args.seed_depth:
         gpc.seed(args.seed_depth)
