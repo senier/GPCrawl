@@ -242,8 +242,8 @@ class GPCrawl:
                 self.search(query)
 
     def creator(self):
-        self.cur.execute('SELECT details_appdetails_packagename, creator FROM apps')
-        for (package, creator) in self.cur.fetchall():
+        self.cur.execute('SELECT DISTINCT creator FROM apps')
+        for (creator,) in self.cur.fetchall():
             self.search(creator)
 
 def main():
