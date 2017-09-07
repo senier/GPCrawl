@@ -200,7 +200,7 @@ class GPCrawl:
 def main():
 
     parser = argparse.ArgumentParser(description = 'Play Store Crawler')
-    parser.add_argument('-S', '--seed', action='store', default=0, dest='seed_depth', help='Do brute force search of depth n')
+    parser.add_argument('-S', '--seed', action='store', type=int, default=0, dest='seed_depth', help='Do brute force search of depth n')
     parser.add_argument('-s', '--search', action='store', help='Search for term')
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Verbose output')
     parser.add_argument('-c', '--cache', action='store', default=2, help='How often to query before considering data cached')
@@ -210,7 +210,7 @@ def main():
     gpc = GPCrawl (tokenfile = 'token.dat', androidid = '3d716411bf8bc802', dbname = 'google_play_test', user = 'alex', verbose = args.verbose, max_cached = args.cache)
 
     if args.seed_depth:
-        gpc.seed(3)
+        gpc.seed(args.seed_depth)
 
     if args.search:
         gpc.search(args.search)
