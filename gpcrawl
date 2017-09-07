@@ -223,7 +223,7 @@ class GPCrawl:
         self.check_terminate(uids_delta)
 
         if self.verbose:
-            print ("searched %s, got %d results, %d new packages" % (query, num_results, uids_delta))
+            print ("Searched '%s', got %d results, %d new packages" % (query, num_results, uids_delta))
 
         return uids_delta
 
