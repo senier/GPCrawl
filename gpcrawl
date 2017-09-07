@@ -8,6 +8,8 @@ import string
 import time
 import argparse
 import urllib2
+from random import shuffle
+from datetime import timedelta
 
 sys.path.append ('googleplay_api')
 from googleplay import GooglePlayAPI, LoginError
@@ -247,11 +249,19 @@ class GPCrawl:
         creator_num = 0
         self.cur.execute('SELECT DISTINCT creator FROM apps')
         creators = self.cur.fetchall()
+        shuffle(creators)
+
+        starttime = time.time()
         for (creator,) in creators:
             creator_num += 1
             if self.verbose:
                 print ("Searching creator %d/%d: '%s'" % (creator_num, len(creators), creator))
             self.search(creator)
+            duration = time.time() - starttime
+            if self.verbose:
+                time_to_go = (len(creators) - creator_num) * creator_num / duration
+                print ("### Duration %s seconds, %d unique packages, ETA=%s" %
+                    (timedelta(seconds=duration), self.unique_ids(), timedelta(seconds=time_to_go)))
 
 def main():
 
