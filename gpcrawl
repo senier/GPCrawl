@@ -6,6 +6,7 @@ import datetime
 import locale
 import string
 import time
+import argparse
 
 sys.path.append ('googleplay_api')
 from googleplay import GooglePlayAPI, LoginError
@@ -16,7 +17,10 @@ def enumchar (level, aset):
 
 class GPCrawl:
 
-    def __init__(self, tokenfile, androidid, dbname, user, destroy_data = False):
+    def __init__(self, tokenfile, androidid, dbname, user, destroy_data = False, max_cached = 1, verbose = False):
+
+        self.max_cached = max_cached
+        self.verbose = verbose
 
         # Set locale such that parsing of download numbers works. Note, that
         # this must be changed consistently with the lang value below.
@@ -72,16 +76,56 @@ class GPCrawl:
             )
         '''
         self.cur.execute(table)
+
+        cache = '''
+            CREATE TABLE IF NOT EXISTS cache
+            (
+                search      TEXT,
+                requests    INTEGER,
+                PRIMARY KEY(search)
+            )
+        '''
+        self.cur.execute(cache)
+
         self.conn.commit()
+
+    def mark_cached(self, searchterm):
+
+        querystring = '''
+            INSERT INTO cache VALUES (%s,%s)
+                ON CONFLICT (search)
+                    DO UPDATE SET requests = cache.requests + 1
+        '''
+        self.cur.execute(querystring, (searchterm,1))
+        self.conn.commit()
+
+        if self.verbose:
+            print("Marked '%s' as cached" % (searchterm,))
+
+    def cached(self, searchterm):
+
+        self.cur.execute('SELECT requests FROM cache WHERE search LIKE %s', (searchterm,))
+        result = self.cur.fetchall()
+        if result:
+            return result[0][0]
+
+        # Not found
+        return 0
 
     def search(self, query):
 
         num_results = 0
         sleeptime = 30
 
+        num_cached = self.cached (query)
+        if  num_cached >= self.max_cached:
+            if self.verbose:
+                print ("Cached %d times, not performing query for '%s'" % (num_cached, query))
+            return
+
         while True:
             try:
-                results = gpc.api.search (query, nb_results=200)
+                results = self.api.search (query, nb_results=200)
                 break
             except IndexError:
                 print ("Invalid result, sleeping for %d seconds" % (sleeptime))
@@ -140,14 +184,36 @@ class GPCrawl:
                      0,
                      'now()'))
         self.conn.commit()
+
+        self.mark_cached(query)
+
+        if self.verbose:
+            print ("searched %s, got %d results" % (query, num_results))
+
         return num_results
 
     def seed (self, length):
         for run in (1,2):
             for query in enumchar(length, string.ascii_lowercase):
-                print ("Run %d: searching '%s'" % (run, query))
                 results = self.search(query)
-                print ("... Got %d results" % (results))
 
-gpc = GPCrawl (tokenfile = 'token.dat', androidid = '3d716411bf8bc802', dbname = 'google_play_test', user = 'alex')
-gpc.seed(3)
+def main():
+
+    parser = argparse.ArgumentParser(description = 'Play Store Crawler')
+    parser.add_argument('-S', '--seed', action='store', default=0, dest='seed_depth', help='Do brute force search of depth n')
+    parser.add_argument('-s', '--search', action='store', help='Search for term')
+    parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Verbose output')
+    parser.add_argument('-c', '--cache', action='store', default=2, help='How often to query before considering data cached')
+    args = parser.parse_args()
+
+    # FIXME: Make db name, user, token file and Android ID configurable
+    gpc = GPCrawl (tokenfile = 'token.dat', androidid = '3d716411bf8bc802', dbname = 'google_play_test', user = 'alex', verbose = args.verbose, max_cached = args.cache)
+
+    if args.seed_depth:
+        gpc.seed(3)
+
+    if args.search:
+        gpc.search(args.search)
+
+if __name__ == '__main__':
+    main()
