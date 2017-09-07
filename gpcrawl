@@ -52,12 +52,12 @@ class GPCrawl:
                 offer_offerType                     INTEGER,
                 details_appDetails_versionCode      INTEGER,
                 details_appDetails_installationSize INTEGER,
-                details_appDetails_numDownloads     INTEGER,
+                details_appDetails_numDownloads     BIGINT,
                 details_appDetails_packageName      TEXT,
                 details_appDetails_uploadDate       TEXT,
                 details_appDetails_file_fileType    INTEGER,
                 details_appDetails_file_versionCode INTEGER,
-                details_appDetails_file_size        INTEGER,
+                details_appDetails_file_size        BIGINT,
                 aggregateRating_type                INTEGER,
                 aggregateRating_starRating          REAL,
                 aggregateRating_ratingsCount        INTEGER,
@@ -154,13 +154,13 @@ class GPCrawl:
                 querystring = '''
                     INSERT INTO apps VALUES 
                         (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                         %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                         %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now())
                     ON CONFLICT (details_appDetails_packageName, details_appDetails_versionCode)
                         DO UPDATE
                             SET duplicates = apps.duplicates + 1, crawlDate = now()
                 '''
 
-                self.cur.execute(querystring,
+                querydata = \
                     (query,
                      result.docid,
                      result.title,
@@ -190,9 +190,13 @@ class GPCrawl:
                      result.detailsUrl,
                      result.shareUrl,
                      result.detailsReusable,
-                     0,
-                     'now()'))
-        self.conn.commit()
+                     0)
+
+                try:
+                    self.cur.execute(querystring, querydata)
+                except psycopg2.DataError as e:
+                    print ("Data error: %s" % (str(e),))
+                    print (str(querydata))
 
         self.conn.commit()
         self.mark_cached(query)
