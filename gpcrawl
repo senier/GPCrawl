@@ -20,7 +20,7 @@ def enumchar (level, aset):
 
 class GPCrawl:
 
-    def __init__(self, androidid, dbname, user, tokenurl, refresh_token_after = 100, destroy_data = False, max_cached = 1, verbose = False, terminate = 0):
+    def __init__(self, androidid, dbname, user, tokenurl, refresh_token_after = 400, destroy_data = False, max_cached = 1, verbose = False, terminate = 0):
 
         self.max_cached = max_cached
         self.verbose = verbose
@@ -275,7 +275,7 @@ def main():
     parser.add_argument('-t', '--token', action='store', default="file:///etc/gpcraw/token.dat", help='URL to fetch token from (may be file://)')
     args = parser.parse_args()
 
-    # FIXME: Make db name, user, token file and Android ID configurable
+    # FIXME: Make db name, user and Android ID configurable
     gpc = GPCrawl (androidid = '3d716411bf8bc802', dbname = 'google_play_test', user = 'alex', tokenurl = args.token, verbose = args.verbose, max_cached = args.cache, terminate = args.terminate)
     gpc.login(True)
 
