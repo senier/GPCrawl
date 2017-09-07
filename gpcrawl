@@ -232,11 +232,17 @@ class GPCrawl:
             for query in enumchar(length, string.ascii_lowercase):
                 self.search(query)
 
+    def creator(self):
+        self.cur.execute('SELECT details_appdetails_packagename, creator FROM apps')
+        for (package, creator) in self.cur.fetchall():
+            self.search(creator)
+
 def main():
 
     parser = argparse.ArgumentParser(description = 'Play Store Crawler')
     parser.add_argument('-S', '--seed', action='store', type=int, default=0, dest='seed_depth', help='Do brute force search of depth n')
     parser.add_argument('-T', '--terminate', action='store', type=int, default=0, help='Terminate after n unsuccessful attempts to query new apps')
+    parser.add_argument('-C', '--creator', action='store_true', help='Extend database by creator')
     parser.add_argument('-s', '--search', action='store', help='Search for term')
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Verbose output')
     parser.add_argument('-c', '--cache', action='store', default=2, help='How often to query before considering data cached')
@@ -250,6 +256,9 @@ def main():
 
     if args.search:
         gpc.search(args.search)
+
+    if args.creator:
+        gpc.creator()
 
 if __name__ == '__main__':
     main()
