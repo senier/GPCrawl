@@ -18,12 +18,13 @@ def enumchar (level, aset):
 
 class GPCrawl:
 
-    def __init__(self, androidid, dbname, user, tokenurl, destroy_data = False, max_cached = 1, verbose = False, terminate = 0):
+    def __init__(self, androidid, dbname, user, tokenurl, refresh_token_after = 100, destroy_data = False, max_cached = 1, verbose = False, terminate = 0):
 
         self.max_cached = max_cached
         self.verbose = verbose
         self.terminate = terminate
         self.tokenurl = tokenurl
+        self.refresh_token_after = refresh_token_after
 
         self.num_unsuccessful = 0
 
@@ -92,9 +93,12 @@ class GPCrawl:
 
         self.conn.commit()
 
-    def login(self):
-        token = urllib2.urlopen(self.tokenurl).read()
-        self.api.login(None, None, token)
+    def login(self, fetch = False):
+        if fetch:
+            if self.verbose:
+                print ("Fetching token from '%s'" % (self.tokenurl,))
+            self.token = urllib2.urlopen(self.tokenurl).read()
+        self.api.login(None, None, self.token)
 
     def mark_cached(self, searchterm):
 
@@ -161,7 +165,7 @@ class GPCrawl:
             except IndexError:
                 print ("Invalid result, sleeping for %d seconds" % (sleeptime))
                 time.sleep (sleeptime)
-                self.login()
+                self.login(self.refresh_token_after <= sleeptime)
                 sleeptime *= 2
 
         for docs in results.doc:
@@ -256,7 +260,7 @@ def main():
 
     # FIXME: Make db name, user, token file and Android ID configurable
     gpc = GPCrawl (androidid = '3d716411bf8bc802', dbname = 'google_play_test', user = 'alex', tokenurl = args.token, verbose = args.verbose, max_cached = args.cache, terminate = args.terminate)
-    gpc.login()
+    gpc.login(True)
 
     if args.seed_depth:
         gpc.seed(args.seed_depth)
