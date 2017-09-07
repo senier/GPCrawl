@@ -112,6 +112,13 @@ class GPCrawl:
         # Not found
         return 0
 
+    def unique_ids(self):
+
+        self.conn.commit()
+        self.cur.execute('SELECT count(*) FROM apps')
+        result = self.cur.fetchall()
+        return result[0][0]
+
     def search(self, query):
 
         num_results = 0
@@ -121,7 +128,9 @@ class GPCrawl:
         if  num_cached >= self.max_cached:
             if self.verbose:
                 print ("Cached %d times, not performing query for '%s'" % (num_cached, query))
-            return
+            return 0
+
+        uids_before = self.unique_ids()
 
         while True:
             try:
@@ -185,17 +194,20 @@ class GPCrawl:
                      'now()'))
         self.conn.commit()
 
+        self.conn.commit()
         self.mark_cached(query)
 
-        if self.verbose:
-            print ("searched %s, got %d results" % (query, num_results))
+        uids_delta = self.unique_ids() - uids_before
 
-        return num_results
+        if self.verbose:
+            print ("searched %s, got %d results, %d new packages" % (query, num_results, uids_delta))
+
+        return uids_delta
 
     def seed (self, length):
         for run in (1,2):
             for query in enumchar(length, string.ascii_lowercase):
-                results = self.search(query)
+                self.search(query)
 
 def main():
 
