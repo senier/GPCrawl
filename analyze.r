@@ -21,4 +21,6 @@ plot(table(data$search), type= "p", main="# search results")
 
 da <- sort(table(data$creator), decreasing = TRUE)
 par(las=2, cex = 0.6, mar = c(20,3,5,3))
-plot(x = da[1:50], type= "p", main="# creators ", xlab = '', ylab = "# apps")
+plot(x = da[1:50], type= "p", main="# creators (top 50)", xlab = '', ylab = "# apps")
+
+plot(x = da[1:1000], type= "p", main="# creators (top 1000)", xlab = '', ylab = "# apps")
