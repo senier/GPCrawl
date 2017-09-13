@@ -264,11 +264,50 @@ class GPCrawl (threading.Thread):
         for run in (1,2):
             self.search_list(enumchar(length, string.ascii_lowercase))
 
-    def creator(self):
+    def extend_creator(self):
         self.cur.execute('SELECT DISTINCT creator FROM apps')
         creators = [creator[0] for creator in self.cur.fetchall()]
         shuffle(creators)
         self.search_list(creators)
+
+    def tokens(self):
+        tokens = {}
+        self.cur.execute('SELECT title FROM apps')
+        result = self.cur.fetchall()
+        for (title,) in result:
+            for t in title.split():
+                t = t.lower()
+                if t in tokens:
+                    tokens[t] += 1
+                else:
+                    tokens[t] = 1
+
+        return tokens
+
+    def extend_tokens(self):
+        tokens = self.tokens().keys()
+        shuffle(tokens)
+        self.search_list(tokens)
+
+    def packages(self):
+        names = {}
+        self.cur.execute('SELECT details_appdetails_packagename FROM apps')
+        result = self.cur.fetchall()
+        for (pname,) in result:
+            plist = pname.split('.')
+            for i in range(0, len(plist)):  # Ignore last component as this is the known package!
+                psubname = '.'.join(plist[0:i])
+                if psubname in names:
+                    names[psubname] += 1
+                else:
+                    names[psubname] = 1
+
+        return names
+
+    def extend_packages(self):
+        packages = self.packages().keys()
+        shuffle(packages)
+        self.search_list(packages)
 
     def run(self):
 
@@ -281,15 +320,22 @@ class GPCrawl (threading.Thread):
             self.seed(self.args.seed_depth)
 
         if self.args.creator:
-            self.creator()
+            self.extend_creator()
 
+        if self.args.packages:
+            self.extend_packages()
+
+        if self.args.titles:
+            self.extend_titles()
 
 def main():
 
     parser = argparse.ArgumentParser(description = 'Play Store Crawler')
     parser.add_argument('-S', '--seed', action='store', type=int, default=0, dest='seed_depth', help='Do brute force search of depth n')
-    parser.add_argument('-T', '--terminate', action='store', type=int, default=0, help='Terminate after n unsuccessful attempts to query new apps')
+    parser.add_argument('-X', '--terminate', action='store', type=int, default=0, help='Terminate after n unsuccessful attempts to query new apps')
     parser.add_argument('-C', '--creator', action='store_true', help='Extend database by creator')
+    parser.add_argument('-P', '--packages', action='store_true', help='Extend database by package name')
+    parser.add_argument('-T', '--titles', action='store_true', help='Extend database by titles')
     parser.add_argument('-D', '--delay', action='store', type=int, default=10, help='Delay between queries (in seconds)')
     parser.add_argument('-s', '--search', action='store', help='Search for term')
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Verbose output')
