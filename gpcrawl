@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 import sys
 import psycopg2
 import datetime
@@ -8,6 +7,7 @@ import string
 import time
 import argparse
 import urllib2
+import threading
 from random import shuffle
 from datetime import timedelta
 
@@ -18,15 +18,17 @@ def enumchar (level, aset):
     if level < 2: return aset
     return [val + newval for newval in aset for val in enumchar(level-1,aset)]
 
-class GPCrawl:
+class GPCrawl (threading.Thread):
 
-    def __init__(self, androidid, dbname, user, tokenurl, refresh_token_after = 400, destroy_data = False, max_cached = 1, verbose = False, terminate = 0):
+    def __init__(self, androidid, dbname, user, args, threadid):
 
-        self.max_cached = max_cached
-        self.verbose = verbose
-        self.terminate = terminate
-        self.tokenurl = tokenurl
-        self.refresh_token_after = refresh_token_after
+        # Initialize threading
+        threading.Thread.__init__(self)
+
+        self.threadid = threadid
+        self.refresh_token_after = args.refresh
+        self.args = args
+        self.verbose = args.verbose
 
         self.num_unsuccessful = 0
 
@@ -39,7 +41,7 @@ class GPCrawl:
         self.conn = psycopg2.connect('dbname=%s user=%s' % (dbname, user))
         self.cur = self.conn.cursor()
 
-        if destroy_data:
+        if args.destroy:
             self.cur.execute ('DROP TABLE apps');
 
         # Create database:
@@ -98,10 +100,10 @@ class GPCrawl:
     def login(self, fetch = False):
         if fetch:
             if self.verbose:
-                print ("Fetching token from '%s'" % (self.tokenurl,))
-            self.token = urllib2.urlopen(self.tokenurl).read()
+                print ("[%s]: Fetching token from '%s'" % (self.threadid, self.args.token))
+            self.token = urllib2.urlopen(self.args.token).read()
         if self.verbose:
-            print ("Logging in with token '%s'" % (self.token,))
+            print ("[%s]: Logging in with token '%s'" % (self.threadid, self.token))
         self.api.login(None, None, self.token)
 
     def mark_cached(self, searchterm):
@@ -115,7 +117,7 @@ class GPCrawl:
         self.conn.commit()
 
         if self.verbose:
-            print("Marked '%s' as cached" % (searchterm,))
+            print("[%s]: Marked '%s' as cached" % (self.threadid, searchterm))
 
     def cached(self, searchterm):
 
@@ -136,7 +138,7 @@ class GPCrawl:
 
     def check_terminate(self, new):
 
-        if not self.terminate:
+        if not self.args.terminate:
             return
 
         if (new > 0):
@@ -144,8 +146,8 @@ class GPCrawl:
         else:
             self.num_unsuccessful += 1
 
-        if self.num_unsuccessful > self.terminate:
-            print ("%d unsuccessful attempts to get new app, terminating" % (self.num_unsuccessful,))
+        if self.num_unsuccessful > self.args.terminate:
+            print ("[%s]: %d unsuccessful attempts to get new app, terminating" % (self.threadid, self.num_unsuccessful,))
             sys.exit(0)
 
     def search(self, query):
@@ -154,9 +156,9 @@ class GPCrawl:
         sleeptime = 15
 
         num_cached = self.cached (query)
-        if  num_cached >= self.max_cached:
+        if  num_cached >= self.args.cache:
             if self.verbose:
-                print ("Cached %d times, not performing query for '%s'" % (num_cached, query))
+                print ("[%s]: Cached %d times, not performing query for '%s'" % (self.threadid, num_cached, query))
             self.check_terminate(0)
             return 0
 
@@ -166,8 +168,9 @@ class GPCrawl:
             try:
                 results = self.api.search (query, nb_results=200)
                 break
-            except:
-                print ("Query error, sleeping for %d seconds" % (sleeptime))
+            except KeyboardInterrupt: raise
+            except Exception as e:
+                print ("[%s]: Query error (%s), sleeping for %d seconds" % (self.threadid, str(e), sleeptime))
                 time.sleep (sleeptime)
                 self.login(self.refresh_token_after <= sleeptime)
                 sleeptime *= 2
@@ -183,7 +186,7 @@ class GPCrawl:
                 upload_date   = datetime.datetime.strptime(ad.uploadDate, "%b %d, %Y")
                 num_downloads = locale.atoi(ad.numDownloads.rstrip('+'))
                 querystring = '''
-                    INSERT INTO apps VALUES 
+                    INSERT INTO apps VALUES
                         (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                          %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now())
                     ON CONFLICT (details_appDetails_packageName, details_appDetails_versionCode)
@@ -226,8 +229,8 @@ class GPCrawl:
                 try:
                     self.cur.execute(querystring, querydata)
                 except psycopg2.DataError as e:
-                    print ("Data error: %s" % (str(e),))
-                    print (str(querydata))
+                    print ("[%s]: Data error: %s" % (self.threadid, str(e)))
+                    print ("[%s]: " % (self.threadid, str(querydata)))
 
         self.conn.commit()
         self.mark_cached(query)
@@ -236,32 +239,49 @@ class GPCrawl:
         self.check_terminate(uids_delta)
 
         if self.verbose:
-            print ("Searched '%s', got %d results, %d new packages" % (query, num_results, uids_delta))
+            print ("[%s]: Searched '%s', got %d results, %d new packages" % (self.threadid, query, num_results, uids_delta))
 
         return uids_delta
 
-    def seed (self, length):
-        for run in (1,2):
-            for query in enumchar(length, string.ascii_lowercase):
-                self.search(query)
+    def search_list(self, queries):
 
-    def creator(self):
-        creator_num = 0
-        self.cur.execute('SELECT DISTINCT creator FROM apps')
-        creators = self.cur.fetchall()
-        shuffle(creators)
-
+        query_num = 0
         starttime = time.time()
-        for (creator,) in creators:
-            creator_num += 1
+        for query in queries:
+            self.search(query)
+            query_num += 1
             if self.verbose:
-                print ("Searching creator %d/%d: '%s'" % (creator_num, len(creators), creator))
-            self.search(creator)
+                print ("[%s]: Searching %d/%d: '%s'" % (self.threadid, query_num, len(queries), query))
+            self.search(query)
             duration = time.time() - starttime
             if self.verbose:
-                time_to_go = (len(creators) - creator_num) * creator_num / duration
-                print ("### Duration %s seconds, %d unique packages, ETA=%s" %
-                    (timedelta(seconds=duration), self.unique_ids(), timedelta(seconds=time_to_go)))
+                time_to_go = (len(queries) - query_num) * query_num / duration
+                print ("[%s]: Duration %s seconds, %d unique packages, ETA=%s" %
+                    (self.threadid, timedelta(seconds=duration), self.unique_ids(), timedelta(seconds=time_to_go)))
+
+    def seed(self, length):
+        for run in (1,2):
+            self.search_list(enumchar(length, string.ascii_lowercase))
+
+    def creator(self):
+        self.cur.execute('SELECT DISTINCT creator FROM apps')
+        creators = [creator[0] for creator in self.cur.fetchall()]
+        shuffle(creators)
+        self.search_list(creators)
+
+    def run(self):
+
+        self.login(True)
+
+        if self.args.search:
+            self.search(self.args.search)
+
+        if self.args.seed_depth:
+            self.seed(self.args.seed_depth)
+
+        if self.args.creator:
+            self.creator()
+
 
 def main():
 
@@ -273,20 +293,23 @@ def main():
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Verbose output')
     parser.add_argument('-c', '--cache', action='store', default=2, type=int, help='How often to query before considering data cached')
     parser.add_argument('-t', '--token', action='store', default="file:///etc/gpcraw/token.dat", help='URL to fetch token from (may be file://)')
+    parser.add_argument('-j', '--parallel', action='store', type=int, default=5, help='Start n multiple threads in parallel')
+    parser.add_argument('-r', '--refresh', action='store', type=int, default=400, help='Refresh token after 400 seconds')
+    parser.add_argument('-d', '--destroy', action='store_true', default=False, help='DANGEROUS! Wipe database.')
     args = parser.parse_args()
 
-    # FIXME: Make db name, user and Android ID configurable
-    gpc = GPCrawl (androidid = '3d716411bf8bc802', dbname = 'google_play_test', user = 'alex', tokenurl = args.token, verbose = args.verbose, max_cached = args.cache, terminate = args.terminate)
-    gpc.login(True)
+    for thread_num in range(1, args.parallel+1):
+        # FIXME: Make db name, user and Android ID configurable
+        gpc = GPCrawl (
+            androidid  = '3d716411bf8bc802',
+            dbname     = 'google_play_test',
+            user       = 'alex',
+            threadid   = 'thread-%2.2d' % (thread_num),
+            args       = args)
+        gpc.daemon = True
+        gpc.start()
 
-    if args.seed_depth:
-        gpc.seed(args.seed_depth)
-
-    if args.search:
-        gpc.search(args.search)
-
-    if args.creator:
-        gpc.creator()
+    while True: time.sleep(1)
 
 if __name__ == '__main__':
     main()
