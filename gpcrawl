@@ -167,6 +167,7 @@ class GPCrawl (threading.Thread):
         while True:
             try:
                 results = self.api.search (query, nb_results=200)
+                time.sleep (self.args.delay)
                 break
             except KeyboardInterrupt: raise
             except Exception as e:
@@ -289,25 +290,29 @@ def main():
     parser.add_argument('-S', '--seed', action='store', type=int, default=0, dest='seed_depth', help='Do brute force search of depth n')
     parser.add_argument('-T', '--terminate', action='store', type=int, default=0, help='Terminate after n unsuccessful attempts to query new apps')
     parser.add_argument('-C', '--creator', action='store_true', help='Extend database by creator')
+    parser.add_argument('-D', '--delay', action='store', type=int, default=10, help='Delay between queries (in seconds)')
     parser.add_argument('-s', '--search', action='store', help='Search for term')
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Verbose output')
     parser.add_argument('-c', '--cache', action='store', default=2, type=int, help='How often to query before considering data cached')
     parser.add_argument('-t', '--token', action='store', default="file:///etc/gpcraw/token.dat", help='URL to fetch token from (may be file://)')
-    parser.add_argument('-j', '--parallel', action='store', type=int, default=5, help='Start n multiple threads in parallel')
+    parser.add_argument('-j', '--parallel', action='store', type=int, default=1, help='Start n multiple threads in parallel')
     parser.add_argument('-r', '--refresh', action='store', type=int, default=400, help='Refresh token after 400 seconds')
     parser.add_argument('-d', '--destroy', action='store_true', default=False, help='DANGEROUS! Wipe database.')
     args = parser.parse_args()
 
     for thread_num in range(1, args.parallel+1):
+        thread_name = 'thread-%2.2d' % (thread_num)
         # FIXME: Make db name, user and Android ID configurable
         gpc = GPCrawl (
             androidid  = '3d716411bf8bc802',
             dbname     = 'google_play_test',
             user       = 'alex',
-            threadid   = 'thread-%2.2d' % (thread_num),
+            threadid   = thread_name,
             args       = args)
         gpc.daemon = True
+        print ("[main]: Starting %s" % (thread_name,))
         gpc.start()
+        time.sleep(10)
 
     while True: time.sleep(1)
 
