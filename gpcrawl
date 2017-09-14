@@ -25,7 +25,7 @@ class Terminate(Exception): pass
 
 class GPAPI:
 
-    def __init__(self, androidid, tokenurl, delay = 0, verbose = False):
+    def __init__(self, androidid, tokenurl, delay = 0, verbose = 0):
 
         self.androidid = androidid
         self.tokenurl  = tokenurl
@@ -63,21 +63,56 @@ class GPAPI:
         time.sleep (self.delay)
         return result
 
-class GPCrawl (threading.Thread):
+class GPDB:
+
+    def __init__(self, dbname, user):
+
+        self.conn = psycopg2.connect('dbname=%s user=%s' % (dbname, user))
+        self.cur = self.conn.cursor()
+
+    def unique_ids(self):
+
+        self.conn.commit()
+        self.cur.execute('SELECT count(*) FROM apps')
+        result = self.cur.fetchall()
+        return result[0][0]
+
+class Statistics (threading.Thread, GPDB):
+
+    def __init__(self, dbname, user):
+
+        # Initialize threading
+        threading.Thread.__init__(self)
+        GPDB.__init__(self, dbname, user)
+
+
+    def run(self):
+        start_time = time.time()
+        start_ids  = self.unique_ids()
+
+        old = start_ids
+        while True:
+            unique_ids   = self.unique_ids()
+            current_time = time.time()
+            rate_since_start = 60 * (unique_ids - start_ids) / (current_time - start_time)
+
+            print ("[statistics] %d unique applications, %d per minute, %d per minute average." % (unique_ids, 4 * (unique_ids - old), rate_since_start))
+            time.sleep(15)
+            old = unique_ids
+
+class GPCrawl (threading.Thread, GPDB):
 
     def __init__(self, api, dbname, user, args, threadid):
 
         # Initialize threading
         threading.Thread.__init__(self)
+        GPDB.__init__(self, dbname, user)
 
         self.threadid = threadid
         self.args = args
         self.verbose = args.verbose
 
         self.num_unsuccessful = 0
-
-        self.conn = psycopg2.connect('dbname=%s user=%s' % (dbname, user))
-        self.cur = self.conn.cursor()
 
         self.api = api
 
@@ -147,7 +182,7 @@ class GPCrawl (threading.Thread):
         self.cur.execute(querystring, (searchterm,1))
         self.conn.commit()
 
-        if self.verbose:
+        if self.verbose > 1:
             print("[%s]: ........ Marked '%s' as cached" % (self.threadid, searchterm))
 
     def cached(self, searchterm):
@@ -160,27 +195,6 @@ class GPCrawl (threading.Thread):
         # Not found
         return 0
 
-    def unique_ids(self):
-
-        self.conn.commit()
-        self.cur.execute('SELECT count(*) FROM apps')
-        result = self.cur.fetchall()
-        return result[0][0]
-
-    def check_terminate(self, new):
-
-        if not self.args.terminate:
-            return
-
-        if (new > 0):
-            self.num_unsuccessful = 0
-        else:
-            self.num_unsuccessful += 1
-
-        if self.num_unsuccessful > self.args.terminate:
-            print ("[%s]: ........ %d unsuccessful attempts to get new app, terminating" % (self.threadid, self.num_unsuccessful,))
-            sys.exit(0)
-
     def search(self, query):
 
         num_fail = 0
@@ -189,9 +203,8 @@ class GPCrawl (threading.Thread):
 
         num_cached = self.cached (query)
         if  num_cached >= self.args.cache:
-            if self.verbose:
+            if self.verbose > 1:
                 print ("[%s]: ........ Cached %d times, not performing query for '%s'" % (self.threadid, num_cached, query))
-            self.check_terminate(0)
             return 0
 
         uids_before = self.unique_ids()
@@ -264,18 +277,13 @@ class GPCrawl (threading.Thread):
                     self.cur.execute(querystring, querydata)
                 except psycopg2.DataError as e:
                     print ("[%s]: ........ Data error: %s" % (self.threadid, str(e)))
-                    print ("[%s]: ........ " % (self.threadid, str(querydata)))
+                    print ("[%s]: ........ %s" % (self.threadid, str(querydata)))
 
         self.conn.commit()
         self.mark_cached(query)
 
-        uids_delta = self.unique_ids() - uids_before
-        self.check_terminate(uids_delta)
-
         if self.verbose:
-            print ("[%s]: ........ Searched '%s', got %d results, %d new packages" % (self.threadid, query, num_results, uids_delta))
-
-        return uids_delta
+            print ("[%s]: ........ Got %3.0d packages, query '%s'" % (self.threadid, num_results, query))
 
     def search_list(self, queries):
 
@@ -284,14 +292,9 @@ class GPCrawl (threading.Thread):
         for query in queries:
             self.search(query)
             query_num += 1
-            if self.verbose:
+            if self.verbose > 1:
                 print ("[%s]: ........ Searching %d/%d: '%s'" % (self.threadid, query_num, len(queries), query))
             self.search(query)
-            duration = time.time() - starttime
-            if self.verbose:
-                time_to_go = (len(queries) - query_num) * query_num / duration
-                print ("[%s]: %d unique packages, duration %s seconds, ETA=%s" %
-                    (self.threadid, self.unique_ids(), timedelta(seconds=duration), timedelta(seconds=time_to_go)))
 
     def seed(self, length):
         for run in (1,2):
@@ -396,7 +399,7 @@ def main():
     parser.add_argument('-T', '--titles', action='store_true', help='Extend database by titles')
     parser.add_argument('-D', '--delay', action='store', type=int, default=10, help='Delay between queries (in seconds)')
     parser.add_argument('-s', '--search', action='store', help='Search for term')
-    parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Verbose output')
+    parser.add_argument('-v', '--verbose', action='count', help='Verbose output')
     parser.add_argument('-c', '--cache', action='store', default=2, type=int, help='How often to query before considering data cached')
     parser.add_argument('-t', '--token', action='store', default="file:///etc/gpcrawl/token.dat", help='URL to fetch token from (may be file://)')
     parser.add_argument('-j', '--parallel', action='store', type=int, default=1, help='Start n multiple threads in parallel')
@@ -405,6 +408,10 @@ def main():
     parser.add_argument('-n', '--dbname', action='store', help='Database name to use.')
     parser.add_argument('-a', '--androidid', action='store', help='Android ID to use.')
     args = parser.parse_args()
+
+    stats = Statistics(dbname = args.dbname, user = args.dbuser)
+    stats.daemon = True
+    stats.start()
 
     while True:
         try:
