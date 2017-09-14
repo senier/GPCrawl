@@ -11,8 +11,7 @@ import threading
 from random import shuffle
 from datetime import timedelta
 
-import stem
-import stem.connection
+from stem import Signal
 from stem.control import Controller
 
 sys.path.append ('googleplay_api')
@@ -21,6 +20,8 @@ from googleplay import GooglePlayAPI, LoginError
 def enumchar (level, aset):
     if level < 2: return aset
     return [val + newval for newval in aset for val in enumchar(level-1,aset)]
+
+class Terminate(Exception): pass
 
 class GPAPI:
 
@@ -35,12 +36,14 @@ class GPAPI:
         self.controller.authenticate()
 
         if self.verbose:
-            print ("Tor version %s" % self.controller.get_version())
+            print ("[gpapi] Tor version %s" % self.controller.get_version())
 
-    def login(self):
-
-        # Create new circuit and wait until it is established
-        self.controller.new_circuit(await_build = True)
+        # Create new circuits
+        newnym_delay = self.controller.get_newnym_wait()
+        if self.verbose:
+            print ("[gpapi] Waiting %d sec until NEWNYM" % newnym_delay)
+        time.sleep(newnym_delay + 5)
+        self.controller.signal(Signal.NEWNYM)
 
         # Set locale such that parsing of download numbers works. Note, that
         # this must be changed consistently with the lang value below.
@@ -49,10 +52,10 @@ class GPAPI:
         self.api = GooglePlayAPI(androidId = self.androidid, lang = 'en_us')
 
         if self.verbose:
-            print ("Fetching token from '%s'" % (self.tokenurl,))
+            print ("[gpapi] Fetching token from '%s'" % (self.tokenurl,))
         self.token = urllib2.urlopen(self.tokenurl).read()
         if self.verbose:
-            print ("Logging in with token '%s'" % (self.token))
+            print ("[gpapi] Logging in with token '%s'" % (self.token))
         self.api.login(None, None, self.token)
 
     def search(self, query):
@@ -145,7 +148,7 @@ class GPCrawl (threading.Thread):
         self.conn.commit()
 
         if self.verbose:
-            print("[%s]: Marked '%s' as cached" % (self.threadid, searchterm))
+            print("[%s]: ........ Marked '%s' as cached" % (self.threadid, searchterm))
 
     def cached(self, searchterm):
 
@@ -175,36 +178,36 @@ class GPCrawl (threading.Thread):
             self.num_unsuccessful += 1
 
         if self.num_unsuccessful > self.args.terminate:
-            print ("[%s]: %d unsuccessful attempts to get new app, terminating" % (self.threadid, self.num_unsuccessful,))
+            print ("[%s]: ........ %d unsuccessful attempts to get new app, terminating" % (self.threadid, self.num_unsuccessful,))
             sys.exit(0)
 
     def search(self, query):
 
         num_fail = 0
         num_results = 0
-        sleeptime = 15
+        sleeptime = 30
 
         num_cached = self.cached (query)
         if  num_cached >= self.args.cache:
             if self.verbose:
-                print ("[%s]: Cached %d times, not performing query for '%s'" % (self.threadid, num_cached, query))
+                print ("[%s]: ........ Cached %d times, not performing query for '%s'" % (self.threadid, num_cached, query))
             self.check_terminate(0)
             return 0
 
         uids_before = self.unique_ids()
 
+        num_errors = 0
         while True:
             try:
                 results = self.api.search (query)
-                num_fail = 0
                 break
-            except KeyboardInterrupt: raise
             except Exception as e:
-                print ("[%s]: Query error (%s), sleeping for %d seconds" % (self.threadid, str(e), sleeptime))
-                num_fail += 1
-                time.sleep (sleeptime)
-                if num_fail > 1:
-                    self.api.login()
+                print ("[%s]: TERMINATING: %s" % (self.threadid, str(e)))
+                raise Terminate()
+            except IndexError:
+                num_errors += 1
+                if num_errors > 2: Terminate()
+                time.sleep(sleeptime)
 
         for docs in results.doc:
             for result in docs.child:
@@ -260,8 +263,8 @@ class GPCrawl (threading.Thread):
                 try:
                     self.cur.execute(querystring, querydata)
                 except psycopg2.DataError as e:
-                    print ("[%s]: Data error: %s" % (self.threadid, str(e)))
-                    print ("[%s]: " % (self.threadid, str(querydata)))
+                    print ("[%s]: ........ Data error: %s" % (self.threadid, str(e)))
+                    print ("[%s]: ........ " % (self.threadid, str(querydata)))
 
         self.conn.commit()
         self.mark_cached(query)
@@ -270,7 +273,7 @@ class GPCrawl (threading.Thread):
         self.check_terminate(uids_delta)
 
         if self.verbose:
-            print ("[%s]: Searched '%s', got %d results, %d new packages" % (self.threadid, query, num_results, uids_delta))
+            print ("[%s]: ........ Searched '%s', got %d results, %d new packages" % (self.threadid, query, num_results, uids_delta))
 
         return uids_delta
 
@@ -282,13 +285,13 @@ class GPCrawl (threading.Thread):
             self.search(query)
             query_num += 1
             if self.verbose:
-                print ("[%s]: Searching %d/%d: '%s'" % (self.threadid, query_num, len(queries), query))
+                print ("[%s]: ........ Searching %d/%d: '%s'" % (self.threadid, query_num, len(queries), query))
             self.search(query)
             duration = time.time() - starttime
             if self.verbose:
                 time_to_go = (len(queries) - query_num) * query_num / duration
-                print ("[%s]: Duration %s seconds, %d unique packages, ETA=%s" %
-                    (self.threadid, timedelta(seconds=duration), self.unique_ids(), timedelta(seconds=time_to_go)))
+                print ("[%s]: %d unique packages, duration %s seconds, ETA=%s" %
+                    (self.threadid, self.unique_ids(), timedelta(seconds=duration), timedelta(seconds=time_to_go)))
 
     def seed(self, length):
         for run in (1,2):
@@ -341,20 +344,48 @@ class GPCrawl (threading.Thread):
 
     def run(self):
 
-        if self.args.search:
-            self.search(self.args.search)
+        try:
 
-        if self.args.seed_depth:
-            self.seed(self.args.seed_depth)
+            if self.args.search:
+                self.search(self.args.search)
 
-        if self.args.creator:
-            self.extend_creator()
+            if self.args.seed_depth:
+                self.seed(self.args.seed_depth)
 
-        if self.args.packages:
-            self.extend_packages()
+            if self.args.creator:
+                self.extend_creator()
 
-        if self.args.titles:
-            self.extend_titles()
+            if self.args.packages:
+                self.extend_packages()
+
+            if self.args.titles:
+                self.extend_titles()
+
+        except Terminate:
+            pass
+
+def sledgehammer(args):
+
+    api = GPAPI(androidid  = '3d716411bf8bc802', tokenurl = args.token, verbose = args.verbose)
+
+    threads = []
+
+    for thread_num in range(1, args.parallel+1):
+        thread_name = 'thread-%2.2d' % (thread_num)
+        # FIXME: Make db name, user and Android ID configurable
+        gpc = GPCrawl (
+            dbname     = 'google_play_test',
+            user       = 'alex',
+            threadid   = thread_name,
+            api        = api,
+            args       = args)
+        gpc.daemon = True
+        threads.append (gpc)
+        print ("[main]: Starting %s" % (thread_name,))
+        gpc.start()
+
+    for thread in threads:
+        thread.join()
 
 def main():
 
@@ -373,23 +404,12 @@ def main():
     parser.add_argument('-d', '--destroy', action='store_true', default=False, help='DANGEROUS! Wipe database.')
     args = parser.parse_args()
 
-    api = GPAPI(androidid  = '3d716411bf8bc802', tokenurl = args.token, verbose = args.verbose)
-    api.login()
-
-    for thread_num in range(1, args.parallel+1):
-        thread_name = 'thread-%2.2d' % (thread_num)
-        # FIXME: Make db name, user and Android ID configurable
-        gpc = GPCrawl (
-            dbname     = 'google_play_test',
-            user       = 'alex',
-            threadid   = thread_name,
-            api        = api,
-            args       = args)
-        gpc.daemon = True
-        print ("[main]: Starting %s" % (thread_name,))
-        gpc.start()
-
-    while True: time.sleep(1)
+    while True:
+        try:
+            sledgehammer(args)
+        except KeyboardInterrupt: raise
+        except: pass
+        time.sleep (60)
 
 if __name__ == '__main__':
     main()
