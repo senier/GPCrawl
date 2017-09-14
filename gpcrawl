@@ -18,28 +18,52 @@ def enumchar (level, aset):
     if level < 2: return aset
     return [val + newval for newval in aset for val in enumchar(level-1,aset)]
 
-class GPCrawl (threading.Thread):
+class GPAPI:
 
-    def __init__(self, androidid, dbname, user, args, threadid):
+    def __init__(self, androidid, tokenurl, delay = 0, verbose = False):
 
-        # Initialize threading
-        threading.Thread.__init__(self)
+        self.androidid = androidid
+        self.tokenurl  = tokenurl
+        self.verbose   = verbose
+        self.delay     = delay
 
-        self.threadid = threadid
-        self.refresh_token_after = args.refresh
-        self.args = args
-        self.verbose = args.verbose
-
-        self.num_unsuccessful = 0
+    def login(self):
 
         # Set locale such that parsing of download numbers works. Note, that
         # this must be changed consistently with the lang value below.
         locale.setlocale(locale.LC_ALL, 'en_US.utf8')
 
-        self.api = GooglePlayAPI(androidId = androidid, lang = 'en_us')
+        self.api = GooglePlayAPI(androidId = self.androidid, lang = 'en_us')
+
+        if self.verbose:
+            print ("Fetching token from '%s'" % (self.tokenurl,))
+        self.token = urllib2.urlopen(self.tokenurl).read()
+        if self.verbose:
+            print ("Logging in with token '%s'" % (self.token))
+        self.api.login(None, None, self.token)
+
+    def search(self, query):
+        result = self.api.search (query, nb_results=200)
+        time.sleep (self.delay)
+        return result
+
+class GPCrawl (threading.Thread):
+
+    def __init__(self, api, dbname, user, args, threadid):
+
+        # Initialize threading
+        threading.Thread.__init__(self)
+
+        self.threadid = threadid
+        self.args = args
+        self.verbose = args.verbose
+
+        self.num_unsuccessful = 0
 
         self.conn = psycopg2.connect('dbname=%s user=%s' % (dbname, user))
         self.cur = self.conn.cursor()
+
+        self.api = api
 
         if args.destroy:
             self.cur.execute ('DROP TABLE apps');
@@ -97,15 +121,6 @@ class GPCrawl (threading.Thread):
 
         self.conn.commit()
 
-    def login(self, fetch = False):
-        if fetch:
-            if self.verbose:
-                print ("[%s]: Fetching token from '%s'" % (self.threadid, self.args.token))
-            self.token = urllib2.urlopen(self.args.token).read()
-        if self.verbose:
-            print ("[%s]: Logging in with token '%s'" % (self.threadid, self.token))
-        self.api.login(None, None, self.token)
-
     def mark_cached(self, searchterm):
 
         querystring = '''
@@ -152,6 +167,7 @@ class GPCrawl (threading.Thread):
 
     def search(self, query):
 
+        num_fail = 0
         num_results = 0
         sleeptime = 15
 
@@ -166,15 +182,16 @@ class GPCrawl (threading.Thread):
 
         while True:
             try:
-                results = self.api.search (query, nb_results=200)
-                time.sleep (self.args.delay)
+                results = self.api.search (query)
+                num_fail = 0
                 break
             except KeyboardInterrupt: raise
             except Exception as e:
                 print ("[%s]: Query error (%s), sleeping for %d seconds" % (self.threadid, str(e), sleeptime))
+                num_fail += 1
                 time.sleep (sleeptime)
-                self.login(self.refresh_token_after <= sleeptime)
-                sleeptime *= 2
+                if num_fail > 1:
+                    self.api.login()
 
         for docs in results.doc:
             for result in docs.child:
@@ -311,8 +328,6 @@ class GPCrawl (threading.Thread):
 
     def run(self):
 
-        self.login(True)
-
         if self.args.search:
             self.search(self.args.search)
 
@@ -340,25 +355,26 @@ def main():
     parser.add_argument('-s', '--search', action='store', help='Search for term')
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Verbose output')
     parser.add_argument('-c', '--cache', action='store', default=2, type=int, help='How often to query before considering data cached')
-    parser.add_argument('-t', '--token', action='store', default="file:///etc/gpcraw/token.dat", help='URL to fetch token from (may be file://)')
+    parser.add_argument('-t', '--token', action='store', default="file:///etc/gpcrawl/token.dat", help='URL to fetch token from (may be file://)')
     parser.add_argument('-j', '--parallel', action='store', type=int, default=1, help='Start n multiple threads in parallel')
-    parser.add_argument('-r', '--refresh', action='store', type=int, default=400, help='Refresh token after 400 seconds')
     parser.add_argument('-d', '--destroy', action='store_true', default=False, help='DANGEROUS! Wipe database.')
     args = parser.parse_args()
+
+    api = GPAPI(androidid  = '3d716411bf8bc802', tokenurl = args.token, verbose = args.verbose)
+    api.login()
 
     for thread_num in range(1, args.parallel+1):
         thread_name = 'thread-%2.2d' % (thread_num)
         # FIXME: Make db name, user and Android ID configurable
         gpc = GPCrawl (
-            androidid  = '3d716411bf8bc802',
             dbname     = 'google_play_test',
             user       = 'alex',
             threadid   = thread_name,
+            api        = api,
             args       = args)
         gpc.daemon = True
         print ("[main]: Starting %s" % (thread_name,))
         gpc.start()
-        time.sleep(10)
 
     while True: time.sleep(1)
 
