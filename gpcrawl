@@ -11,6 +11,10 @@ import threading
 from random import shuffle
 from datetime import timedelta
 
+import stem
+import stem.connection
+from stem.control import Controller
+
 sys.path.append ('googleplay_api')
 from googleplay import GooglePlayAPI, LoginError
 
@@ -27,7 +31,16 @@ class GPAPI:
         self.verbose   = verbose
         self.delay     = delay
 
+        self.controller = Controller.from_socket_file()
+        self.controller.authenticate()
+
+        if self.verbose:
+            print ("Tor version %s" % self.controller.get_version())
+
     def login(self):
+
+        # Create new circuit and wait until it is established
+        self.controller.new_circuit(await_build = True)
 
         # Set locale such that parsing of download numbers works. Note, that
         # this must be changed consistently with the lang value below.

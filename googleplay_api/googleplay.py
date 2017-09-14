@@ -12,7 +12,13 @@ from google.protobuf.message import Message, DecodeError
 
 import googleplay_pb2
 
+proxies = {
+  'http': 'socks5://localhost:9050',
+  'https': 'socks5://localhost:9050',
+}
+
 s = requests.Session()
+s.proxies = proxies
 ssl_verify="/etc/ssl/certs/ca-certificates.crt"
 
 conn_test_url="https://android.clients.google.com"
