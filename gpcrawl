@@ -214,13 +214,12 @@ class GPCrawl (threading.Thread, GPDB):
             try:
                 results = self.api.search (query)
                 break
-            except Exception as e:
-                print ("[%s]: TERMINATING: %s" % (self.threadid, str(e)))
-                raise Terminate()
             except IndexError:
                 num_errors += 1
                 if num_errors > 2: Terminate()
                 time.sleep(sleeptime)
+            except Exception as e:
+                print ("[%s]: %s" % (self.threadid, str(e)))
 
         for docs in results.doc:
             for result in docs.child:
