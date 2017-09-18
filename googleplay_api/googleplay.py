@@ -20,9 +20,7 @@ proxies = {
 s = requests.Session()
 s.proxies = proxies
 ssl_verify="/etc/ssl/certs/ca-certificates.crt"
-
 conn_test_url="https://android.clients.google.com"
-s.post(conn_test_url, verify=ssl_verify)
 
 class LoginError(Exception):
     def __init__(self, value):
@@ -59,6 +57,7 @@ class GooglePlayAPI(object):
         self.androidId = androidId
         self.lang = lang
         self.debug = debug
+        s.post(conn_test_url, verify=ssl_verify)
 
     def toDict(self, protoObj):
         """Converts the (protobuf) result from an API call into a dict, for
