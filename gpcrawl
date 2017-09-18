@@ -8,6 +8,7 @@ import time
 import argparse
 import urllib2
 import threading
+import os
 from random import shuffle
 from datetime import timedelta
 
@@ -22,6 +23,9 @@ def enumchar (level, aset):
     return [val + newval for newval in aset for val in enumchar(level-1,aset)]
 
 class Terminate(Exception): pass
+
+failed_searches = 0
+update_failed = threading.Lock()
 
 class GPAPI:
 
@@ -49,18 +53,40 @@ class GPAPI:
         # this must be changed consistently with the lang value below.
         locale.setlocale(locale.LC_ALL, 'en_US.utf8')
 
-        self.api = GooglePlayAPI(androidId = self.androidid, lang = 'en_us')
+        self.__api = GooglePlayAPI(androidId = self.androidid, lang = 'en_us')
 
         if self.verbose:
             print ("[gpapi] Fetching token from '%s'" % (self.tokenurl,))
         self.token = urllib2.urlopen(self.tokenurl).read()
         if self.verbose:
             print ("[gpapi] Logging in with token '%s'" % (self.token))
-        self.api.login(None, None, self.token)
+        self.__api.login(None, None, self.token)
+
+    def update_failed_searches(self, value):
+
+        global update_failed
+        global failed_searches
+        update_failed.acquire()
+        failed_searches += value
+        update_failed.release()
 
     def search(self, query):
-        result = self.api.search (query, nb_results=200)
-        time.sleep (self.delay)
+
+        while True:
+
+            num_errors = 0
+            try:
+                result = self.__api.search (query, nb_results=200)
+                self.update_failed_searches(-1)
+                break
+            except IndexError:
+                self.update_failed_searches(1)
+                num_errors += 1
+                if num_errors > 2:
+                    os._exit(0)
+            except Exception as e:
+                print ("[gpapi] Search exception: '%s'" % (str(e)))
+
         return result
 
 class GPDB:
@@ -134,13 +160,17 @@ class GPDB:
 
 class Statistics (threading.Thread, GPDB):
 
-    def __init__(self, dbname, user):
+    def __init__(self, dbname, user, failed_max):
 
         # Initialize threading
         threading.Thread.__init__(self)
         GPDB.__init__(self, dbname, user, False)
+        self.__failed_max = failed_max
 
     def run(self):
+
+        global failed_searches
+
         start_time = time.time()
         start_ids  = self.unique_ids()
 
@@ -150,7 +180,13 @@ class Statistics (threading.Thread, GPDB):
             current_time = time.time()
             rate_since_start = 60 * (unique_ids - start_ids) / (current_time - start_time)
 
-            print ("[statistics] %d unique applications, %d per minute, %d per minute average." % (unique_ids, 4 * (unique_ids - old), rate_since_start))
+            print ("[statistics] %d unique applications, %d per minute, %d per minute average, %d failed." % (unique_ids, 4 * (unique_ids - old), rate_since_start, failed_searches))
+
+            if self.__failed_max > 0 and failed_searches > self.__failed_max:
+                print ("Exiting...")
+                os._exit(0)
+                return
+
             time.sleep(15)
             old = unique_ids
 
@@ -208,16 +244,7 @@ class GPCrawl (threading.Thread, GPDB):
         uids_before = self.unique_ids()
 
         num_errors = 0
-        while True:
-            try:
-                results = self.api.search (query)
-                break
-            except IndexError:
-                num_errors += 1
-                if num_errors > 2: Terminate()
-                time.sleep(sleeptime)
-            except Exception as e:
-                print ("[%s]: %s" % (self.threadid, str(e)))
+        results = self.api.search (query)
 
         for docs in results.doc:
             for result in docs.child:
@@ -406,7 +433,7 @@ def main():
     parser.add_argument('-a', '--androidid', action='store', help='Android ID to use.')
     args = parser.parse_args()
 
-    stats = Statistics(dbname = args.dbname, user = args.dbuser)
+    stats = Statistics(dbname = args.dbname, user = args.dbuser, failed_max = args.terminate)
     stats.daemon = True
     stats.start()
 
