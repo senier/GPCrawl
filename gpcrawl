@@ -65,58 +65,12 @@ class GPAPI:
 
 class GPDB:
 
-    def __init__(self, dbname, user):
+    def __init__(self, dbname, user, destroy):
 
         self.conn = psycopg2.connect('dbname=%s user=%s' % (dbname, user))
         self.cur = self.conn.cursor()
 
-    def unique_ids(self):
-
-        self.conn.commit()
-        self.cur.execute('SELECT count(*) FROM apps')
-        result = self.cur.fetchall()
-        return result[0][0]
-
-class Statistics (threading.Thread, GPDB):
-
-    def __init__(self, dbname, user):
-
-        # Initialize threading
-        threading.Thread.__init__(self)
-        GPDB.__init__(self, dbname, user)
-
-
-    def run(self):
-        start_time = time.time()
-        start_ids  = self.unique_ids()
-
-        old = start_ids
-        while True:
-            unique_ids   = self.unique_ids()
-            current_time = time.time()
-            rate_since_start = 60 * (unique_ids - start_ids) / (current_time - start_time)
-
-            print ("[statistics] %d unique applications, %d per minute, %d per minute average." % (unique_ids, 4 * (unique_ids - old), rate_since_start))
-            time.sleep(15)
-            old = unique_ids
-
-class GPCrawl (threading.Thread, GPDB):
-
-    def __init__(self, api, dbname, user, args, threadid):
-
-        # Initialize threading
-        threading.Thread.__init__(self)
-        GPDB.__init__(self, dbname, user)
-
-        self.threadid = threadid
-        self.args = args
-        self.verbose = args.verbose
-
-        self.num_unsuccessful = 0
-
-        self.api = api
-
-        if args.destroy:
+        if destroy:
             self.cur.execute ('DROP TABLE apps');
 
         # Create database:
@@ -169,8 +123,52 @@ class GPCrawl (threading.Thread, GPDB):
             )
         '''
         self.cur.execute(cache)
+        self.conn.commit()
+
+    def unique_ids(self):
 
         self.conn.commit()
+        self.cur.execute('SELECT count(*) FROM apps')
+        result = self.cur.fetchall()
+        return result[0][0]
+
+class Statistics (threading.Thread, GPDB):
+
+    def __init__(self, dbname, user):
+
+        # Initialize threading
+        threading.Thread.__init__(self)
+        GPDB.__init__(self, dbname, user, False)
+
+    def run(self):
+        start_time = time.time()
+        start_ids  = self.unique_ids()
+
+        old = start_ids
+        while True:
+            unique_ids   = self.unique_ids()
+            current_time = time.time()
+            rate_since_start = 60 * (unique_ids - start_ids) / (current_time - start_time)
+
+            print ("[statistics] %d unique applications, %d per minute, %d per minute average." % (unique_ids, 4 * (unique_ids - old), rate_since_start))
+            time.sleep(15)
+            old = unique_ids
+
+class GPCrawl (threading.Thread, GPDB):
+
+    def __init__(self, api, dbname, user, args, threadid):
+
+        # Initialize threading
+        threading.Thread.__init__(self)
+        GPDB.__init__(self, dbname, user, args.destroy)
+
+        self.threadid = threadid
+        self.args = args
+        self.verbose = args.verbose
+
+        self.num_unsuccessful = 0
+
+        self.api = api
 
     def mark_cached(self, searchterm):
 
