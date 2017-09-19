@@ -14,12 +14,22 @@ dbExistsTable(con, "apps")
 # Disable scientific numbers
 options(scipen=999)
 
+paid <- dbGetQuery(con, "SELECT COUNT(offer_checkoutflowrequired) count, offer_checkoutflowrequired AS paied FROM apps GROUP BY offer_checkoutflowrequired")
+pie(paid$count, labels = c('free', 'paid'), main = 'Paid vs. free apps')
+
+price_euro <- dbGetQuery(con, "select apps.offer_micros/1000000.0 as price from apps where offer_checkoutflowrequired = true and apps.offer_currencycode = 'EUR'")
+hist = hist(price_euro$price, breaks = 1500, col = "blue", main = "App price for paid apps", xlab = 'Price [EUR]', xlim = c(0,25))
+
 tlds <- dbGetQuery(con, "SELECT count(*) AS count, split_part(details_appdetails_packagename,'.',1) AS name FROM apps GROUP BY name ORDER BY count desc LIMIT 8")
 pie(tlds$count, labels = tlds$name, main = 'Apps by package TLD', col=rainbow(length(tlds$count)))
 
-dl <- dbGetQuery(con, "SELECT details_appdetails_numdownloads as downloads FROM apps WHERE details_appdetails_numdownloads > 0")
+dl <- dbGetQuery(con, "SELECT details_appdetails_numdownloads as downloads, aggregaterating_ratingscount as ratings, aggregaterating_commentcount as comments FROM apps WHERE details_appdetails_numdownloads > 0")
+
 hist = hist(dl$downloads, breaks = 50, plot = FALSE)
 plot(hist, col = "green", main = "Downloads", xlab = 'downloads', ylim = c(0.00001,200000))
+
+hist(dl$ratings, col = "red", main = "Ratings", xlab = 'ratings')
+hist(dl$comments, col = "blue", main = "Comments", xlab = 'comments')
 
 data <- dbGetQuery(con, "SELECT search, creator, title, aggregaterating_starrating AS rating, (details_appdetails_file_size/1024/1024) as size, details_appdetails_numdownloads as downloads FROM apps")
 
