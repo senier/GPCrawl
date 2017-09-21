@@ -25,6 +25,7 @@ def enumchar (level, aset):
 class Terminate(Exception): pass
 
 failed_searches = 0
+num_searches = 0
 update_failed = threading.Lock()
 
 class GPAPI:
@@ -66,8 +67,10 @@ class GPAPI:
 
         global update_failed
         global failed_searches
+        global num_searches
         update_failed.acquire()
         failed_searches += value
+        num_searches += 1
         update_failed.release()
 
     def search(self, query):
@@ -160,16 +163,18 @@ class GPDB:
 
 class Statistics (threading.Thread, GPDB):
 
-    def __init__(self, dbname, user, failed_max):
+    def __init__(self, dbname, user, failed_max, num_threads):
 
         # Initialize threading
         threading.Thread.__init__(self)
         GPDB.__init__(self, dbname, user, False)
         self.__failed_max = failed_max
+        self.__num_threads = num_threads
 
     def run(self):
 
         global failed_searches
+        global num_searches
 
         start_time = time.time()
         start_ids  = self.unique_ids()
@@ -180,9 +185,10 @@ class Statistics (threading.Thread, GPDB):
             current_time = time.time()
             rate_since_start = 60 * (unique_ids - start_ids) / (current_time - start_time)
 
-            print ("[statistics] %d unique applications, %d per minute, %d per minute average, %d failed." % (unique_ids, 4 * (unique_ids - old), rate_since_start, failed_searches))
+            print ("[statistics] %d unique applications, %d per minute, %d per minute average, %d/%d failed." % (unique_ids, 4 * (unique_ids - old), rate_since_start, failed_searches, num_searches))
 
             if self.__failed_max > 0 and failed_searches > self.__failed_max:
+                print ("[result] %d apps, %d average, %d threads, %d searches" % (unique_ids, rate_since_start, self.__num_threads, num_searches))
                 print ("Exiting...")
                 os._exit(0)
                 return
@@ -312,7 +318,6 @@ class GPCrawl (threading.Thread, GPDB):
     def search_list(self, queries):
 
         query_num = 0
-        starttime = time.time()
         for query in queries:
             self.search(query)
             query_num += 1
@@ -433,7 +438,7 @@ def main():
     parser.add_argument('-a', '--androidid', action='store', help='Android ID to use.')
     args = parser.parse_args()
 
-    stats = Statistics(dbname = args.dbname, user = args.dbuser, failed_max = args.terminate)
+    stats = Statistics(dbname = args.dbname, user = args.dbuser, failed_max = args.terminate, num_threads = args.parallel)
     stats.daemon = True
     stats.start()
 
