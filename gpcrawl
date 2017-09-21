@@ -325,7 +325,7 @@ class GPCrawl (threading.Thread, GPDB):
             self.search_list(enumchar(length, string.ascii_lowercase))
 
     def extend_creator(self):
-        self.cur.execute('SELECT DISTINCT creator FROM apps')
+        self.cur.execute('SELECT DISTINCT creator FROM apps WHERE random() < 0.001')
         creators = [creator[0] for creator in self.cur.fetchall()]
         shuffle(creators)
         self.search_list(creators)
