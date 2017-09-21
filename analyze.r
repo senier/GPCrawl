@@ -1,6 +1,20 @@
 #!/usr/bin/env Rscript
 
-library(base64enc)
+# To use this script libpq-dev, R and the postgres interface for R must be installed:
+#
+# # apt install r-base-core libpq-dev
+#
+# In R do:
+# install.packages("RPostgreSQL")
+#
+# RPostgreSQL does not seem to be able to conenct to a database with the default user
+# and no password. Set a user password in Postgres and add it to the ~/.pgpass file:
+#
+# posggres=# ALTER USER senier WITH PASSWORD '<somepassword>';
+# ALTER ROLE
+# $ echo '<somepassword>' > ~/.pgpass
+# $ chmod 600 ~/.pgpass
+
 library(RPostgreSQL)
 
 # Read db password from file
@@ -8,7 +22,7 @@ password <- scan("~/.pgpass", what="")
 
 # PostgreSQL driver
 drv <- dbDriver("PostgreSQL")
-con <- dbConnect(drv, dbname = "google_play_test", host = "localhost", port = 5432, user = "alex", password = password)
+con <- dbConnect(drv, dbname = "google_play_test", host = "localhost", port = 5432, user = "senier", password = password)
 dbExistsTable(con, "apps")
 
 # Disable scientific numbers
