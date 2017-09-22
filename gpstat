@@ -19,11 +19,21 @@ class GPStats:
         result = self.cur.fetchall()
         return result[0][0]
 
+    def creators_last_n_minutes(self, minutes):
+        self.cur.execute ("SELECT count(DISTINCT creator) FROM apps WHERE crawldate > 'now'::timestamp - '%d minutes'::interval" % minutes)
+        result = self.cur.fetchall()
+        return result[0][0]
+
     def show(self, minutes, targetnum):
-        total = self.apps_total()
-        last_minutes = self.apps_last_n_minutes (minutes)
-        eta_hours = (targetnum-total)/(60*last_minutes/minutes)
-        print ("%d apps, %d apps last %d minutes, %d per minute, ETA: %d hrs. (%2.1f days)" % (total, last_minutes, minutes, last_minutes/minutes, eta_hours, eta_hours/24.0))
+        apps_total = self.apps_total()
+        apps_last_minutes = self.apps_last_n_minutes (minutes)
+        creators_last_minutes = self.creators_last_n_minutes (minutes)
+        eta_hours = (targetnum-apps_total)/(60*apps_last_minutes/minutes)
+        print ("%8.0d apps" % (apps_total,))
+        print ("%8.0d apps last %d minutes" % (apps_last_minutes, minutes))
+        print ("%8.0d creators last %d minutes" % (creators_last_minutes, minutes))
+        print ("%8.0d per minute\n" % (apps_last_minutes/minutes))
+        print ("ETA: %d hrs. (%2.1f days)" % (eta_hours, eta_hours/24.0))
 
 def main():
         stats = GPStats("google_play_test", "senier")
