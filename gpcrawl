@@ -336,24 +336,24 @@ class GPCrawl (threading.Thread, GPDB):
         shuffle(creators)
         self.search_list(creators)
 
-    def tokens(self):
-        tokens = {}
-        self.cur.execute('SELECT title FROM apps')
+    def titles(self):
+        titles = {}
+        self.cur.execute('SELECT title FROM apps WHERE random() < 0.001')
         result = self.cur.fetchall()
         for (title,) in result:
             for t in title.split():
                 t = t.lower()
-                if t in tokens:
-                    tokens[t] += 1
+                if t in titles:
+                    titles[t] += 1
                 else:
-                    tokens[t] = 1
+                    titles[t] = 1
 
-        return tokens
+        return titles
 
-    def extend_tokens(self):
-        tokens = self.tokens().keys()
-        shuffle(tokens)
-        self.search_list(tokens)
+    def extend_titles(self):
+        titles = self.titles().keys()
+        shuffle(titles)
+        self.search_list(titles)
 
     def packages(self):
         names = {}
