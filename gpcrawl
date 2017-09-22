@@ -357,7 +357,7 @@ class GPCrawl (threading.Thread, GPDB):
 
     def packages(self):
         names = {}
-        self.cur.execute('SELECT details_appdetails_packagename FROM apps')
+        self.cur.execute('SELECT details_appdetails_packagename FROM apps WHERE random() < 0.001')
         result = self.cur.fetchall()
         for (pname,) in result:
             plist = pname.split('.')
