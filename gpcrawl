@@ -269,7 +269,7 @@ class GPCrawl (threading.Thread, GPDB):
                          %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now())
                     ON CONFLICT (details_appDetails_packageName, details_appDetails_versionCode)
                         DO UPDATE
-                            SET duplicates = apps.duplicates + 1, crawlDate = now()
+                            SET duplicates = apps.duplicates + 1
                 '''
 
                 querydata = \
