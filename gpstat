@@ -1,0 +1,33 @@
+#!/usr/bin/env python
+
+import sys
+import psycopg2
+
+class GPStats:
+
+    def __init__(self, dbname, user):
+        self.conn = psycopg2.connect('dbname=%s user=%s' % (dbname, user))
+        self.cur = self.conn.cursor()
+
+    def apps_total(self):
+        self.cur.execute ("SELECT count(*) FROM apps")
+        result = self.cur.fetchall()
+        return result[0][0]
+
+    def apps_last_n_minutes(self, minutes):
+        self.cur.execute ("SELECT count(*) FROM apps WHERE crawldate > 'now'::timestamp - '%d minutes'::interval" % minutes)
+        result = self.cur.fetchall()
+        return result[0][0]
+
+    def show(self, minutes, targetnum):
+        total = self.apps_total()
+        last_minutes = self.apps_last_n_minutes (minutes)
+        eta_hours = (targetnum-total)/(60*last_minutes/minutes)
+        print ("%d apps, %d apps last %d minutes, %d per minute, ETA: %d hrs. (%2.1f days)" % (total, last_minutes, minutes, last_minutes/minutes, eta_hours, eta_hours/24.0))
+
+def main():
+        stats = GPStats("google_play_test", "senier")
+        stats.show(int(sys.argv[1]), 3500000)
+
+if __name__ == '__main__':
+    main()
