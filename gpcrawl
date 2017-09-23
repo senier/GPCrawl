@@ -180,17 +180,31 @@ class Statistics (threading.Thread, GPDB):
         start_time = time.time()
         start_ids  = self.unique_ids()
 
+        nothing_new = 0
         old = start_ids
+
         while True:
             unique_ids   = self.unique_ids()
             current_time = time.time()
             rate_since_start = 60 * (unique_ids - start_ids) / (current_time - start_time)
 
-            print ("[statistics] %d unique applications, %d per minute, %d per minute average, %d/%d failed." % (unique_ids, 12 * (unique_ids - old), rate_since_start, failed_searches, num_searches))
+            new_ids = unique_ids - old
+
+            if new_ids == 0:
+                nothing_new += 1
+            else:
+                nothing_new = 0
+
+            print ("[statistics] %d unique applications, %d per minute, %d per minute average, %d/%d failed." % (unique_ids, 12 * new_ids, rate_since_start, failed_searches, num_searches))
 
             if self.__failed_max > 0 and failed_searches > self.__failed_max:
                 print ("[result] %d apps, %d average, %d threads, %d searches" % (unique_ids, rate_since_start, self.__num_threads, num_searches))
-                print ("Exiting...")
+                print ("Too many failed, exiting...")
+                os._exit(0)
+                return
+
+            if nothing_new > 4:
+                print ("Nothing new, exiting...")
                 os._exit(0)
                 return
 
