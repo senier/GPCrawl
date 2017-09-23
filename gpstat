@@ -39,7 +39,7 @@ class GPStats:
 
 def main():
         stats = GPStats("google_play_test", "senier")
-        stats.show(int(sys.argv[1]), 3500000)
+        stats.show(int(sys.argv[1]), int(sys.argv[2]))
 
 if __name__ == '__main__':
     main()
