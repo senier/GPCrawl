@@ -14,6 +14,11 @@ class GPStats:
         result = self.cur.fetchall()
         return result[0][0]
 
+    def apps_paid(self):
+        self.cur.execute ("SELECT count(*) FROM apps WHERE offer_checkoutflowrequired = 'TRUE'")
+        result = self.cur.fetchall()
+        return result[0][0]
+
     def apps_last_n_minutes(self, minutes):
         self.cur.execute ("SELECT count(*) FROM apps WHERE crawldate > 'now'::timestamp - '%d minutes'::interval" % minutes)
         result = self.cur.fetchall()
@@ -24,6 +29,11 @@ class GPStats:
         result = self.cur.fetchall()
         return result[0][0]
 
+    def total_filesize(self):
+        self.cur.execute ("SELECT sum(details_appdetails_file_size) FROM apps")
+        result = self.cur.fetchall()
+        return result[0][0]
+
     def show(self, minutes, targetnum):
         apps_total = self.apps_total()
         apps_last_minutes = self.apps_last_n_minutes (minutes)
@@ -31,7 +41,13 @@ class GPStats:
         print ("%8.0d apps" % (apps_total,))
         print ("%8.0d apps last %d minutes" % (apps_last_minutes, minutes))
         print ("%8.0d creators last %d minutes" % (creators_last_minutes, minutes))
-        print ("%8.0d per minute\n" % (apps_last_minutes/minutes))
+        print ("%8.0d per minute\n\n" % (apps_last_minutes/minutes))
+
+        file_size = self.total_filesize()
+        print ("Total size: %ld GiB\n" % (file_size / 1024 / 1024 / 1024))
+
+        apps_paid = self.apps_paid()
+        print ("Paid apps:  %ld (%0.1f%%)\n" % (apps_paid, 100.0*apps_paid/apps_total))
 
         if apps_last_minutes > 0:
             eta_hours = (targetnum-apps_total)/(60*apps_last_minutes/minutes)
