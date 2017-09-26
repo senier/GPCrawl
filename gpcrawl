@@ -385,7 +385,8 @@ class GPCrawl (threading.Thread, GPDB):
         return names
 
     def extend_packages(self):
-        packages = sorted(self.packages().keys(), key=len)
+        packages = self.packages().keys()
+        shuffle(packages)
         self.search_list(packages)
 
     def run(self):
