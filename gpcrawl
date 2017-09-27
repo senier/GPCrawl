@@ -9,6 +9,7 @@ import argparse
 import urllib2
 import threading
 import os
+import re
 import string
 from random import shuffle
 from datetime import timedelta
@@ -356,7 +357,9 @@ class GPCrawl (threading.Thread, GPDB):
         self.cur.execute('SELECT title FROM apps WHERE random() < 0.001')
         result = self.cur.fetchall()
         for (title,) in result:
-            purged = title.translate(string.maketrans(".,():;/|![]?&", "             "))
+            purged = title.translate(string.maketrans(".,():;/|![]?&+*", "               "))
+            # Remove leading/trailing '-'
+            purged = re.sub("[--]*$", "", re.sub("^[--]*", "", purged))
             for t in purged.split():
                 t = t.lower()
                 if t in titles:
