@@ -404,9 +404,6 @@ class GPCrawl (threading.Thread, GPDB):
 
         try:
 
-            if self.args.search:
-                self.search(self.args.search)
-
             if self.args.seed_depth:
                 self.seed(self.args.seed_depth)
 
@@ -422,9 +419,7 @@ class GPCrawl (threading.Thread, GPDB):
         except Terminate:
             pass
 
-def sledgehammer(args):
-
-    api = GPAPI(androidid  = args.androidid, tokenurl = args.token, verbose = args.verbose)
+def sledgehammer(args, api):
 
     threads = []
 
@@ -464,13 +459,21 @@ def main():
     parser.add_argument('-a', '--androidid', action='store', help='Android ID to use.')
     args = parser.parse_args()
 
+    api = GPAPI(androidid  = args.androidid, tokenurl = args.token, verbose = args.verbose)
+
+    if args.search:
+        result = api.search(args.search).doc
+        print("Found %d results" % (len(result),))
+        print(str(result))
+        sys.exit(0)
+
     stats = Statistics(dbname = args.dbname, user = args.dbuser, failed_max = args.terminate, num_threads = args.parallel)
     stats.daemon = True
     stats.start()
 
     while True:
         try:
-            sledgehammer(args)
+            sledgehammer(args, api)
         except KeyboardInterrupt: raise
         except: pass
         time.sleep (60)
