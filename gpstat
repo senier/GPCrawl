@@ -38,7 +38,7 @@ class GPStats:
         apps_total = self.apps_total()
         apps_last_minutes = self.apps_last_n_minutes (minutes)
         creators_last_minutes = self.creators_last_n_minutes (minutes)
-        print ("%8.0d apps" % (apps_total,))
+        print ("%8.0d apps (%2.1f%%)" % (apps_total, 100.0*apps_total/targetnum))
         print ("%8.0d apps last %d minutes" % (apps_last_minutes, minutes))
         print ("%8.0d creators last %d minutes" % (creators_last_minutes, minutes))
         print ("%8.0d per minute\n\n" % (apps_last_minutes/minutes))
