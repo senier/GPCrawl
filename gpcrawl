@@ -419,26 +419,6 @@ class GPCrawl (threading.Thread, GPDB):
         except Terminate:
             pass
 
-def sledgehammer(args, api):
-
-    threads = []
-
-    for thread_num in range(1, args.parallel+1):
-        thread_name = 'thread-%2.2d' % (thread_num)
-        print ("[main]: Starting %s" % (thread_name,))
-        gpc = GPCrawl (
-            dbname     = args.dbname,
-            user       = args.dbuser,
-            threadid   = thread_name,
-            api        = api,
-            args       = args)
-        gpc.daemon = True
-        threads.append (gpc)
-        gpc.start()
-
-    for thread in threads:
-        thread.join()
-
 def main():
 
     parser = argparse.ArgumentParser(description = 'Play Store Crawler')
@@ -471,12 +451,28 @@ def main():
     stats.daemon = True
     stats.start()
 
-    while True:
-        try:
-            sledgehammer(args, api)
-        except KeyboardInterrupt: raise
-        except: pass
-        time.sleep (60)
+    threads = []
+
+    for thread_num in range(1, args.parallel+1):
+        thread_name = 'thread-%2.2d' % (thread_num)
+        print ("[main]: Starting %s" % (thread_name,))
+        gpc = GPCrawl (
+            dbname     = args.dbname,
+            user       = args.dbuser,
+            threadid   = thread_name,
+            api        = api,
+            args       = args)
+        gpc.daemon = True
+        threads.append (gpc)
+        gpc.start()
+
+    for thread in threads:
+        thread.join()
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt: raise
+    except Exception as e:
+        print(str(e))
+        pass
