@@ -12,13 +12,11 @@ from google.protobuf.message import Message, DecodeError
 
 import googleplay_pb2
 
-proxies = {
+default_proxies = {
   'http': 'socks5://localhost:9050',
   'https': 'socks5://localhost:9050',
 }
 
-s = requests.Session()
-s.proxies = proxies
 ssl_verify="/etc/ssl/certs/ca-certificates.crt"
 conn_test_url="https://android.clients.google.com"
 
@@ -52,12 +50,14 @@ class GooglePlayAPI(object):
     ACCOUNT_TYPE_HOSTED_OR_GOOGLE = "HOSTED_OR_GOOGLE"
     authSubToken = None
 
-    def __init__(self, androidId, lang, debug=False): # you must use a device-associated androidId value
+    def __init__(self, androidId, lang, proxies = default_proxies, debug=False): # you must use a device-associated androidId value
         self.preFetch = {}
         self.androidId = androidId
         self.lang = lang
         self.debug = debug
-        s.post(conn_test_url, verify=ssl_verify)
+        self.session = requests.Session()
+        self.session.proxies = proxies
+        self.session.post(conn_test_url, verify=ssl_verify)
 
     def toDict(self, protoObj):
         """Converts the (protobuf) result from an API call into a dict, for
@@ -126,7 +126,7 @@ class GooglePlayAPI(object):
             headers = {
                 "Accept-Encoding": "",
             }
-            response = s.post(self.URL_LOGIN, data=params, headers=headers, verify=ssl_verify)
+            response = self.session.post(self.URL_LOGIN, data=params, headers=headers, verify=ssl_verify)
             data = response.text.split()
             params = {}
             for d in data:
@@ -162,9 +162,9 @@ class GooglePlayAPI(object):
 
             url = "https://android.clients.google.com/fdfe/%s" % path
             if datapost is not None:
-                response = s.post(url, data=str(datapost), headers=headers, verify=ssl_verify)
+                response = self.session.post(url, data=str(datapost), headers=headers, verify=ssl_verify)
             else:
-                response = s.get(url, headers=headers, verify=ssl_verify)
+                response = self.session.get(url, headers=headers, verify=ssl_verify)
             data = response.content
 
         message = googleplay_pb2.ResponseWrapper.FromString(data)
@@ -306,7 +306,7 @@ class GooglePlayAPI(object):
         # If progress_bar is asked
         from clint.textui import progress
         response_content = str()
-        response = s.get(url, headers=headers, cookies=cookies, verify=ssl_verify,stream=True)
+        response = self.session.get(url, headers=headers, cookies=cookies, verify=ssl_verify,stream=True)
         total_length = int(response.headers.get('content-length'))
         for chunk in progress.bar(response.iter_content(chunk_size=1024),expected_size=(total_length/1024) + 1):
             if chunk:
