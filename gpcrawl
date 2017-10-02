@@ -268,12 +268,14 @@ class GPCrawl (threading.Thread, GPDB):
         if  num_cached >= self.args.cache:
             if self.verbose > 1:
                 print ("[%s]: ........ Cached %d times, not performing query for '%s'" % (self.threadid, num_cached, query))
-            return 0
+            return
 
         uids_before = self.unique_ids()
-
         num_errors = 0
+
         results = self.api.search (query)
+        if not hasattr(results, 'doc'):
+            return
 
         for docs in results.doc:
             for result in docs.child:
