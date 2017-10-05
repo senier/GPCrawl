@@ -389,7 +389,7 @@ class GPCrawl (threading.Thread, GPDB):
         result = self.cur.fetchall()
         for (pname,) in result:
             plist = pname.split('.')
-            for i in range(0, len(plist)):  # Ignore last component as this is the known package!
+            for i in range(1, len(plist)):  # Ignore last component as this is the known package!
                 psubname = '.'.join(plist[0:i])
                 if psubname in names:
                     names[psubname] += 1
