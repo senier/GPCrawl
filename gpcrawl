@@ -379,7 +379,8 @@ class GPCrawl (threading.Thread, GPDB):
 
     def extend_titles(self):
         titles = self.titles().keys()
-        shuffle(titles)
+        if self.args.shuffle:
+            shuffle(titles)
         self.search_list(titles)
 
     def packages(self):
@@ -399,7 +400,12 @@ class GPCrawl (threading.Thread, GPDB):
 
     def extend_packages(self):
         packages = self.packages().keys()
-        shuffle(packages)
+
+        if self.args.shuffle:
+            shuffle(packages)
+        else:
+            packages = sorted(packages, key=(lambda x: len(x.split('.'))))
+
         self.search_list(packages)
 
     def run(self):
@@ -428,6 +434,7 @@ def main():
     parser.add_argument('-X', '--terminate', action='store', type=int, default=0, help='Terminate after n unsuccessful attempts to query new apps')
     parser.add_argument('-C', '--creator', action='store_true', help='Extend database by creator')
     parser.add_argument('-P', '--packages', action='store_true', help='Extend database by package name')
+    parser.add_argument('-H', '--shuffle', action='store_true', help='Shuffle queries')
     parser.add_argument('-T', '--titles', action='store_true', help='Extend database by titles')
     parser.add_argument('-D', '--delay', action='store', type=int, default=10, help='Delay between queries (in seconds)')
     parser.add_argument('-s', '--search', action='store', help='Search for term')
