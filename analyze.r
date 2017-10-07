@@ -10,7 +10,7 @@
 # RPostgreSQL does not seem to be able to conenct to a database with the default user
 # and no password. Set a user password in Postgres and add it to the ~/.pgpass file:
 #
-# posggres=# ALTER USER senier WITH PASSWORD '<somepassword>';
+# posggres=# ALTER USER <someuser> WITH PASSWORD '<somepassword>';
 # ALTER ROLE
 # $ echo '<somepassword>' > ~/.pgpass
 # $ chmod 600 ~/.pgpass
