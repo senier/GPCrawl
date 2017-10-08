@@ -27,10 +27,12 @@ class Request:
     def read(self, graph):
         print ("Reading graph from %s" % (graph))
         self.__graph = nx.read_adjlist(graph)
+        print ("Read %d nodes" % (nx.number_of_nodes(self.__graph)))
 
     def write(self, graph):
         print ("Writing graph to %s" % (graph))
         nx.write_adjlist(self.__graph, graph)
+        print ("Wrote %d nodes" % (nx.number_of_nodes(self.__graph)))
 
     def similar(self, package):
 
