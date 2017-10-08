@@ -10,17 +10,17 @@ class GPStats:
         self.cur = self.conn.cursor()
 
     def apps_total(self):
-        self.cur.execute ("SELECT count(*) FROM apps")
+        self.cur.execute ("SELECT count(DISTINCT details_appDetails_packagename) FROM apps")
         result = self.cur.fetchall()
         return result[0][0]
 
     def apps_paid(self):
-        self.cur.execute ("SELECT count(*) FROM apps WHERE offer_checkoutflowrequired = 'TRUE'")
+        self.cur.execute ("SELECT count(DISTINCT details_appDetails_packagename) FROM apps WHERE offer_checkoutflowrequired = 'TRUE'")
         result = self.cur.fetchall()
         return result[0][0]
 
     def apps_last_n_minutes(self, minutes):
-        self.cur.execute ("SELECT count(*) FROM apps WHERE crawldate > 'now'::timestamp - '%d minutes'::interval" % minutes)
+        self.cur.execute ("SELECT count(DISTINCT details_appDetails_packagename) FROM apps WHERE crawldate > 'now'::timestamp - '%d minutes'::interval" % minutes)
         result = self.cur.fetchall()
         return result[0][0]
 
