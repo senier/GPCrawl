@@ -19,7 +19,7 @@ class Request:
         self.__graph = nx.DiGraph()
 
     def bootstrap(self, infile):
-        print ("Bootstrapping graph from %s" % (graph))
+        print ("Bootstrapping graph from %s" % (infile))
         with open(infile, 'r') as f:
             for node in set([x.strip() for x in f.readlines()]):
                 self.__graph.add_node(node)
