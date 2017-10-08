@@ -5,26 +5,34 @@ from lxml import html
 import requests
 import time
 from random import shuffle
+import networkx as nx
+import argparse
 
 class Request:
 
-    def __init__(self, seedfile):
+    def __init__(self):
 
         self.__headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
 
-        self.__packages = set()
         self.__cache = set()
-        self.__seedfile = seedfile
 
-        with open(self.__seedfile, 'r') as f:
-            self.__packages = set([x.strip() for x in f.readlines()])
+        self.__graph = nx.DiGraph()
 
-    def write (self):
-        with open(self.__seedfile, 'w') as f:
-            for package in self.__packages:
-                f.write (package + "\n")
+    def bootstrap(self, infile):
+        print ("Bootstrapping graph from %s" % (graph))
+        with open(infile, 'r') as f:
+            for node in set([x.strip() for x in f.readlines()]):
+                self.__graph.add_node(node)
 
-    def similar (self, package):
+    def read(self, graph):
+        print ("Reading graph from %s" % (graph))
+        self.__graph = nx.read_adjlist(graph)
+
+    def write(self, graph):
+        print ("Writing graph to %s" % (graph))
+        nx.write_adjlist(self.__graph, graph)
+
+    def similar(self, package):
 
         if package in self.__cache:
             return
@@ -47,38 +55,55 @@ class Request:
         page = requests.get('https://play.google.com/%s' % (moreurl), headers=self.__headers)
         tree = html.fromstring(page.content)
 
-        num_old = len(self.__packages)
-        new_packages = set([card.attrib['data-docid'] for card in tree.cssselect('.card')])
-        self.__packages.update (new_packages)
-        delta = len(self.__packages)-num_old
-        if delta > 0:
-            print('*** %d new' % (delta))
+        similar_packages = set([card.attrib['data-docid'] for card in tree.cssselect('.card')])
+        nodes_before = nx.number_of_nodes(self.__graph)
+        for similar_package in similar_packages:
+            self.__graph.add_edge(package, similar_package)
+        nodes_after = nx.number_of_nodes(self.__graph)
+        new_nodes = nodes_after - nodes_before
+        if new_nodes > 0:
+            print(">>> %d new related packages, %d related packages, now at %d" % (new_nodes, len(similar_packages), nodes_after))
 
         # Add package to cache
         self.__cache.add(package)
 
-        #for new_package in new_packages:
-        #    self.similar (new_package)
-
     def extend (self):
 
-        packages = list(self.__packages)
-        shuffle(packages)
+        all_nodes = nx.nodes(self.__graph)
 
         pkg_curr = 1
-        pkg_last = len(packages)
+        pkg_last = len(all_nodes)
 
-        for p in packages:
-            print('%d/%d (%2.1f), quering %s (%d packages)' % (pkg_curr, pkg_last, 100.0 * pkg_curr / pkg_last, p, len(self.__packages)))
+        print ("Extending, %d nodes" % (pkg_last))
+
+        for node in all_nodes.keys():
+            # Skip nodes which already have similar packages
+            if len(self.__graph.edges(nbunch=[node])) > 0:
+                continue
+            print('%d/%d (%2.1f%%), quering %s' % (pkg_curr, pkg_last, 100.0 * pkg_curr / pkg_last, node))
             pkg_curr += 1
-            self.similar(p)
+            self.similar(node)
 
-r = Request(sys.argv[1])
-try:
-    r.extend()
-except Exception as e:
-    print (str(e))
-    pass
-finally:
-    print('Storing packages')
-    r.write()
+def main():
+
+    parser = argparse.ArgumentParser(description = 'Play Store Website Crawler')
+    parser.add_argument('-g', '--graph', action='store', required='True', help='Graph file')
+    parser.add_argument('-b', '--bootstrap', action='store', help='Bootstrap list')
+    args = parser.parse_args()
+
+    r = Request()
+    if args.bootstrap:
+        r.bootstrap(args.bootstrap)
+    else:
+        r.read(args.graph)
+
+    try:
+        r.extend()
+    except Exception as e:
+        print (str(e))
+        pass
+    finally:
+        r.write(args.graph)
+
+if __name__ == '__main__':
+    main()
