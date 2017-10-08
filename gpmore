@@ -1,0 +1,84 @@
+#!/usr/bin/env python
+
+import sys
+from lxml import html
+import requests
+import time
+from random import shuffle
+
+class Request:
+
+    def __init__(self, seedfile):
+
+        self.__headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
+
+        self.__packages = set()
+        self.__cache = set()
+        self.__seedfile = seedfile
+
+        with open(self.__seedfile, 'r') as f:
+            self.__packages = set([x.strip() for x in f.readlines()])
+
+    def write (self):
+        with open(self.__seedfile, 'w') as f:
+            for package in self.__packages:
+                f.write (package + "\n")
+
+    def similar (self, package):
+
+        if package in self.__cache:
+            return
+
+        while True:
+            try:
+                page = requests.get('https://play.google.com/store/apps/details?id=%s' % (package), headers=self.__headers)
+                break
+            except KeyboardInterrupt: raise
+            except:
+                time.sleep(1)
+
+        tree = html.fromstring(page.content)
+        more = tree.cssselect('.see-more')
+        if not more:
+            print("No results")
+            return
+
+        moreurl = more[0].attrib['href']
+        page = requests.get('https://play.google.com/%s' % (moreurl), headers=self.__headers)
+        tree = html.fromstring(page.content)
+
+        num_old = len(self.__packages)
+        new_packages = set([card.attrib['data-docid'] for card in tree.cssselect('.card')])
+        self.__packages.update (new_packages)
+        delta = len(self.__packages)-num_old
+        if delta > 0:
+            print('*** %d new' % (delta))
+
+        # Add package to cache
+        self.__cache.add(package)
+
+        #for new_package in new_packages:
+        #    self.similar (new_package)
+
+    def extend (self):
+
+        packages = list(self.__packages)
+        shuffle(packages)
+
+        pkg_curr = 1
+        pkg_last = len(packages)
+
+        for p in packages:
+            print('%d/%d (%2.1f), quering %s (%d packages)' % (pkg_curr, pkg_last, 100.0 * pkg_curr / pkg_last, p, len(self.__packages)))
+            pkg_curr += 1
+            self.similar(p)
+
+r = Request(sys.argv[1])
+try:
+    r.extend()
+except Exception as e:
+    print (str(e))
+    pass
+finally:
+    print('Storing packages')
+    r.write()
