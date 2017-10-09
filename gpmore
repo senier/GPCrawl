@@ -10,13 +10,13 @@ import argparse
 
 class Request:
 
-    def __init__(self):
+    def __init__(self, graphfile):
 
         self.__headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
 
-        self.__cache = set()
-
         self.__graph = nx.DiGraph()
+        self.__graphfile = graphfile
+        self.__session = requests.Session()
 
     def bootstrap(self, infile):
         print ("Bootstrapping graph from %s" % (infile))
@@ -24,29 +24,26 @@ class Request:
             for node in set([x.strip() for x in f.readlines()]):
                 self.__graph.add_node(node)
 
-    def read(self, graph):
-        print ("Reading graph from %s" % (graph))
-        self.__graph = nx.read_adjlist(graph)
+    def read(self):
+        print ("Reading graph from %s" % (self.__graphfile))
+        self.__graph = nx.read_adjlist(self.__graphfile)
         print ("Read %d nodes" % (nx.number_of_nodes(self.__graph)))
 
-    def write(self, graph):
-        print ("Writing graph to %s" % (graph))
-        nx.write_adjlist(self.__graph, graph)
+    def write(self):
+        print ("Writing graph to %s" % (self.__graphfile))
+        nx.write_adjlist(self.__graph, self.__graphfile)
         print ("Wrote %d nodes" % (nx.number_of_nodes(self.__graph)))
 
     def request(self, url):
 
         while True:
             try:
-                return requests.get(url, headers=self.__headers)
+                return self.__session.get(url, headers=self.__headers)
             except KeyboardInterrupt: raise
             except:
                 time.sleep(1)
 
     def similar(self, package):
-
-        if package in self.__cache:
-            return
 
         page = self.request('https://play.google.com/store/apps/details?id=%s' % (package))
         tree = html.fromstring(page.content)
@@ -68,13 +65,11 @@ class Request:
         if new_nodes > 0:
             print(">>> %d new related packages, %d related packages, now at %d" % (new_nodes, len(similar_packages), nodes_after))
 
-        # Add package to cache
-        self.__cache.add(package)
-
     def extend (self):
 
         all_nodes = nx.nodes(self.__graph)
 
+        last_checkpoint = time.time()
         pkg_curr = 1
         pkg_last = len(all_nodes)
 
@@ -88,6 +83,12 @@ class Request:
             pkg_curr += 1
             self.similar(node)
 
+            # Write checkpoint every hour. FIXME: Make configurable
+            if last_checkpoint + 3600 < time.time():
+                print('CHECKPOINTING...')
+                self.write()
+                last_checkpoint = time.time()
+
 def main():
 
     parser = argparse.ArgumentParser(description = 'Play Store Website Crawler')
@@ -95,16 +96,16 @@ def main():
     parser.add_argument('-b', '--bootstrap', action='store', help='Bootstrap list')
     args = parser.parse_args()
 
-    r = Request()
+    r = Request(args.graph)
     if args.bootstrap:
         r.bootstrap(args.bootstrap)
     else:
-        r.read(args.graph)
+        r.read()
 
     try:
         r.extend()
     finally:
-        r.write(args.graph)
+        r.write()
 
 if __name__ == '__main__':
     main()
