@@ -2,3 +2,5 @@ requests[socks]
 stem
 psycopg2
 protobuf
+networkx
+cssselect
