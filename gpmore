@@ -34,19 +34,21 @@ class Request:
         nx.write_adjlist(self.__graph, graph)
         print ("Wrote %d nodes" % (nx.number_of_nodes(self.__graph)))
 
+    def request(self, url):
+
+        while True:
+            try:
+                return requests.get(url, headers=self.__headers)
+            except KeyboardInterrupt: raise
+            except:
+                time.sleep(1)
+
     def similar(self, package):
 
         if package in self.__cache:
             return
 
-        while True:
-            try:
-                page = requests.get('https://play.google.com/store/apps/details?id=%s' % (package), headers=self.__headers)
-                break
-            except KeyboardInterrupt: raise
-            except:
-                time.sleep(1)
-
+        page = self.request('https://play.google.com/store/apps/details?id=%s' % (package))
         tree = html.fromstring(page.content)
         more = tree.cssselect('.see-more')
         if not more:
@@ -54,7 +56,7 @@ class Request:
             return
 
         moreurl = more[0].attrib['href']
-        page = requests.get('https://play.google.com/%s' % (moreurl), headers=self.__headers)
+        page = self.request('https://play.google.com/%s' % (moreurl))
         tree = html.fromstring(page.content)
 
         similar_packages = set([card.attrib['data-docid'] for card in tree.cssselect('.card')])
@@ -101,9 +103,6 @@ def main():
 
     try:
         r.extend()
-    except Exception as e:
-        print (str(e))
-        pass
     finally:
         r.write(args.graph)
 
