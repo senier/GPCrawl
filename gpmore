@@ -34,6 +34,21 @@ class Request:
         nx.write_adjlist(self.__graph, self.__graphfile)
         print ("Wrote %d nodes" % (nx.number_of_nodes(self.__graph)))
 
+    def write_gexf(self, outfile):
+        import networkx.readwrite.gexf as gexf
+        print ("Writing GEXT graph to %s" % (outfile))
+        gexf.write_gexf(self.__graph, outfile)
+
+    def write_gml(self, outfile):
+        import networkx.readwrite.gml as gml
+        print ("Writing GML graph to %s" % (outfile))
+        gml.write_gml(self.__graph, outfile)
+
+    def write_graphml(self, outfile):
+        import networkx.readwrite.graphml as graphml
+        print ("Writing GraphML graph to %s" % (outfile))
+        graphml.write_graphml(self.__graph, outfile)
+
     def request(self, url):
 
         while True:
@@ -94,6 +109,9 @@ def main():
     parser = argparse.ArgumentParser(description = 'Play Store Website Crawler')
     parser.add_argument('-g', '--graph', action='store', required='True', help='Graph file')
     parser.add_argument('-b', '--bootstrap', action='store', help='Bootstrap list')
+    parser.add_argument('-E', '--gexf', action='store', help='Output to GEXF file')
+    parser.add_argument('-M', '--gml', action='store', help='Output to GML file')
+    parser.add_argument('-R', '--graphml', action='store', help='Output to GraphML file')
     args = parser.parse_args()
 
     r = Request(args.graph)
@@ -101,6 +119,18 @@ def main():
         r.bootstrap(args.bootstrap)
     else:
         r.read()
+
+    if args.gexf:
+        r.write_gexf(args.gexf)
+
+    if args.gml:
+        r.write_gml(args.gml)
+
+    if args.graphml:
+        r.write_graphml(args.graphml)
+
+    if args.gexf or args.gml or args.graphml:
+        sys.exit(0)
 
     try:
         r.extend()
