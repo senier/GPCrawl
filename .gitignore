@@ -6,3 +6,5 @@ Rplots.pdf
 backup
 download
 packages.txt*
+*.adjl
+*.gml
