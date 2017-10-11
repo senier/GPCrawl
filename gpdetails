@@ -94,7 +94,11 @@ class GPDETAILS:
         ad = result.details.appDetails
         of = result.offer[0]
 
-        upload_date   = datetime.datetime.strptime(ad.uploadDate, "%b %d, %Y")
+        try:
+            upload_date = datetime.datetime.strptime(ad.uploadDate, "%b %d, %Y")
+        except:
+            upload_date = 'null'
+
         num_downloads = locale.atoi(ad.numDownloads.rstrip('+'))
         querystring = '''
             INSERT INTO apps VALUES
@@ -187,15 +191,14 @@ class GPDETAILS:
                     self.insert(entry.doc)
                 except Exception as e:
                     print(str(e))
-                    print(str(entry))
-                    raise
+                    sleep(1)
 
                 num_results += 1
 
             rate = 60 * num_results / (time.time() - start_time)
             print("Stored %d results, %2.1f packages per minute" % (num_results, rate))
 
-            if self.__tor:
+            if self.__tor and num_results < 10:
                 self.new_circuit()
                 self.login()
 
