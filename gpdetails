@@ -191,7 +191,7 @@ class GPDETAILS:
                     self.insert(entry.doc)
                 except Exception as e:
                     print(str(e))
-                    sleep(1)
+                    time.sleep(1)
 
                 num_results += 1
 
