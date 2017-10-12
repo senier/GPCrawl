@@ -8,6 +8,7 @@ import locale
 import urllib2
 import argparse
 import psycopg2
+from random import shuffle
 from stem import Signal
 from stem.control import Controller
 
@@ -85,9 +86,9 @@ class GPDETAILS:
 
     def app_ids(self):
 
-        self.__cur.execute('SELECT apps.details_appdetails_packagename FROM apps LEFT JOIN details ON apps.details_appdetails_packagename = details.details_appdetails_packagename AND apps.details_appdetails_versioncode = details.details_appdetails_versioncode WHERE details.details_appdetails_packagename IS NULL AND random() < 0.001')
+        self.__cur.execute('SELECT apps.details_appdetails_packagename FROM apps LEFT JOIN details ON apps.details_appdetails_packagename = details.details_appdetails_packagename AND apps.details_appdetails_versioncode = details.details_appdetails_versioncode WHERE details.details_appdetails_packagename IS NULL')
         result = [(result[0]) for result in self.__cur.fetchall()]
-        return result[0:self.__packages_per_query]
+        return result
 
     def insert(self, result):
 
@@ -172,35 +173,48 @@ class GPDETAILS:
 
         while True:
 
-            start_time = time.time()
-
             packages = self.app_ids()
             if not packages:
                 print("No more packages, exiting")
                 return
 
-            num_results = 0
-            print ("Requesting details for %d packages" % (len(packages)))
+            print("Got %d packages" % len(packages))
+            shuffle(packages)
 
-            for entry in self.__api.bulkDetails(packages).entry:
+            while True:
 
-                if not entry or not entry.doc or not entry.doc.docid:
-                    continue
+                num_results = 0
+                start_time = time.time()
+
+                chunk = packages[0:self.__packages_per_query]
+                if not chunk: break
+
+                packages = packages[self.__packages_per_query:]
+
+                print ("Requesting details for %d packages" % (len(chunk)))
 
                 try:
-                    self.insert(entry.doc)
-                except Exception as e:
-                    print(str(e))
-                    time.sleep(1)
+                    for entry in self.__api.bulkDetails(chunk).entry:
 
-                num_results += 1
+                        if not entry or not entry.doc or not entry.doc.docid:
+                            continue
 
-            rate = 60 * num_results / (time.time() - start_time)
-            print("Stored %d results, %2.1f packages per minute" % (num_results, rate))
+                        try:
+                            self.insert(entry.doc)
+                        except Exception as e:
+                            print(str(e))
+                            time.sleep(1)
 
-            if self.__tor and num_results < 10:
-                self.new_circuit()
-                self.login()
+                        num_results += 1
+
+                    if self.__tor and num_results < 100:
+                        self.new_circuit()
+                        self.login()
+
+                    rate = 60 * num_results / (time.time() - start_time)
+                    print("Stored %d results, %2.1f packages per minute" % (num_results, rate))
+                except KeyboardInterrupt: raise
+                except: pass
 
 def main():
 
