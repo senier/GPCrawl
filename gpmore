@@ -90,7 +90,7 @@ class Request:
 
         print ("Extending, %d nodes" % (pkg_last))
 
-        for node in all_nodes.keys():
+        for node in all_nodes:
             # Skip nodes which already have similar packages
             if len(self.__graph.edges(nbunch=[node])) > 0:
                 continue
