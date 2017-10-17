@@ -1,0 +1,111 @@
+#!/usr/bin/env python
+
+import sys
+import requests
+from lxml import html
+import stem.control
+import threading
+import time
+
+class Circuit:
+
+    def __init__(self, exitnode):
+
+        self.__session = requests.Session()
+        self.__exitnode = exitnode
+
+        self.__session.proxies = {
+            'http':  'socks5h://USER-%s-XXX:password@localhost:9050' % (exitnode),
+            'https': 'socks5h://USER-%s-YYY:password@localhost:9050' % (exitnode)}
+
+        self.__session.headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
+        self.__session.verify = True
+
+        self.ip()
+
+    def __enter__(self):
+        return self
+
+    def ip(self):
+
+        try:
+            page = self.__session.get('https://check.torproject.org/', timeout=1)
+        except KeyboardInterrupt: raise
+        except: return None
+
+        tree = html.fromstring(page.content)
+        more = tree.cssselect('.content p strong')
+        if not more:
+            return None
+
+        return more[0].text
+
+    def exitnode(self):
+        return self.__exitnode
+
+class Fetcher(threading.Thread):
+
+    def __init__(self, exitnode):
+
+        # Initialize threading
+        threading.Thread.__init__(self)
+
+        self.__exitnode = exitnode
+        try:
+            self.__circuit = Circuit(self.__exitnode)
+        except KeyboardInterrupt: raise
+
+    def run(self):
+        while True:
+            print("Ip for %s: %s" % (self.__circuit.exitnode(), self.__circuit.ip()))
+            time.sleep(1)
+
+def main():
+
+    circuit_id = None
+
+    controller = stem.control.Controller.from_socket_file()
+    controller.authenticate()
+
+    for circuit in controller.get_circuits():
+        print("Closing circuit %s" % (circuit.id))
+        controller.close_circuit(circuit.id)
+
+    for stream in controller.get_streams():
+        print("Closing stream %s" % (stream))
+        controller.close_stream(stream)
+
+    def attach_stream(stream):
+        if stream.status == 'NEW':
+            print(str(stream))
+            controller.attach_stream(stream.id, circuit_id)
+
+    # FIXME: Static entry node
+    entry_node = "7A5A9DF2FAE2EDDD4EB3BBF2C489BF296F1B2144"
+
+    threads = []
+    exit_nodes = [desc.fingerprint for desc in controller.get_server_descriptors() if desc.exit_policy.is_exiting_allowed()]
+    print("%d exit nodes" % (len(exit_nodes)))
+
+    try:
+        controller.add_event_listener(attach_stream, stem.control.EventType.STREAM)
+        controller.set_conf('__LeaveStreamsUnattached', '1')  # leave stream management to us
+
+        for exit_node in exit_nodes:
+            print("BUILDING circuit for %s" % (exit_node))
+            circuit_id = controller.new_circuit([entry_node, exit_node], await_build = True)
+            thread = Fetcher(exit_node)
+            thread.deamon = True
+            threads.append (thread)
+            thread.start()
+            print("BUILT circuit: %s" % (str(circuit_id)))
+
+        for thread in threads:
+            thread.join()
+
+    finally:
+        controller.remove_event_listener(attach_stream)
+        controller.reset_conf('__LeaveStreamsUnattached')
+
+if __name__ == '__main__':
+    main()
