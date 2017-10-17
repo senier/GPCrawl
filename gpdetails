@@ -23,7 +23,7 @@ class GPDETAILS:
         self.__tokenurl = args.token
         self.__tor = args.tor
         # FIMXE: Make configurable. Play store seems to return ~600 apps per query.
-        self.__packages_per_query = 1000
+        self.__packages_per_query = 2000
         self.verbose   = args.verbose
 
         # Set locale such that parsing of download numbers works. Note, that
@@ -83,10 +83,15 @@ class GPDETAILS:
             print ("[gpapi] Logging in with token '%s'" % (self.token))
         self.__api.login(None, None, self.token)
 
+    def num_packages(self):
+
+        self.__cur.execute('SELECT count(*) FROM details')
+        result = self.__cur.fetchall()
+        return result[0][0]
 
     def app_ids(self):
 
-        self.__cur.execute('SELECT apps.details_appdetails_packagename FROM apps LEFT JOIN details ON apps.details_appdetails_packagename = details.details_appdetails_packagename AND apps.details_appdetails_versioncode = details.details_appdetails_versioncode WHERE details.details_appdetails_packagename IS NULL')
+        self.__cur.execute('SELECT apps.details_appdetails_packagename FROM apps LEFT JOIN details ON apps.details_appdetails_packagename = details.details_appdetails_packagename WHERE details.details_appdetails_packagename IS NULL')
         result = [(result[0]) for result in self.__cur.fetchall()]
         return result
 
@@ -95,8 +100,10 @@ class GPDETAILS:
         ad = result.details.appDetails
         of = result.offer[0]
 
+        print("Insert %s" % (ad.packageName))
+
         try:
-            upload_date = datetime.datetime.strptime(ad.uploadDate, "%b %d, %Y")
+            upload_date = datetime.datetime.strptime(ad.uploadDate, "%b %d, %Y").date()
         except:
             upload_date = 'null'
 
@@ -122,7 +129,7 @@ class GPDETAILS:
              ad.installationSize,
              num_downloads,
              ad.packageName,
-             upload_date.date(),
+             upload_date,
              ad.file[0].fileType,
              ad.file[0].versionCode,
              ad.file[0].size,
@@ -145,11 +152,16 @@ class GPDETAILS:
         except psycopg2.DataError as e:
             print ("Data error: %s for query %s" % (str(e), str(querydata)))
 
+        self.__conn.commit()
+
+    def insert_details(self, result):
+
+        ad = result.details.appDetails
+        permissions = [str(perm) for perm in ad.permission]
+
         querystring = '''
             INSERT INTO details VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,now()) ON CONFLICT DO NOTHING
         '''
-
-        permissions = [str(perm) for perm in ad.permission]
 
         querydata = \
             (ad.packageName,
@@ -178,43 +190,29 @@ class GPDETAILS:
                 print("No more packages, exiting")
                 return
 
-            print("Got %d packages" % len(packages))
             shuffle(packages)
+            print("Got %d packages" % len(packages))
 
             while True:
 
-                num_results = 0
-                start_time = time.time()
-
-                chunk = packages[0:self.__packages_per_query]
-                if not chunk: break
-
-                packages = packages[self.__packages_per_query:]
-
-                print ("Requesting details for %d packages" % (len(chunk)))
-
                 try:
-                    for entry in self.__api.bulkDetails(chunk).entry:
+                    entries = self.__api.bulkDetails(packages[0:self.__packages_per_query])
+                    packages_before = self.num_packages()
+
+                    for entry in entries.entry:
 
                         if not entry or not entry.doc or not entry.doc.docid:
                             continue
 
-                        try:
-                            self.insert(entry.doc)
-                        except Exception as e:
-                            print(str(e))
-                            time.sleep(1)
+                        self.insert_details(entry.doc)
 
-                        num_results += 1
+                    print("Inserted %d packages" % (self.num_packages() - packages_before))
 
-                    if self.__tor and num_results < 100:
-                        self.new_circuit()
-                        self.login()
-
-                    rate = 60 * num_results / (time.time() - start_time)
-                    print("Stored %d results, %2.1f packages per minute" % (num_results, rate))
                 except KeyboardInterrupt: raise
-                except: pass
+                except Exception as e:
+                    print(str(e))
+
+                packages = packages[self.__packages_per_query:]
 
 def main():
 
