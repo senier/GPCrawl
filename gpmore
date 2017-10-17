@@ -7,16 +7,52 @@ import time
 from random import shuffle
 import networkx as nx
 import argparse
+import threading
+import Queue
 
-class Request:
+import gp
+
+class Extend(gp.Worker):
+
+    def __init__(self, exitnode, pool):
+        gp.Worker.__init__(self, exitnode, pool)
+        self.__pool = pool
+
+        unused = self.request('https://play.google.com/store/apps/details?id=com.whatsapp')
+
+    def similar(self, package):
+
+        page = self.request('https://play.google.com/store/apps/details?id=%s' % (package))
+        tree = html.fromstring(page.content)
+        more = tree.cssselect('.see-more')
+        if not more:
+            print("%s: No results" % (self.exitnode()))
+            return
+
+        moreurl = more[0].attrib['href']
+        page = self.request('https://play.google.com/%s' % (moreurl))
+        tree = html.fromstring(page.content)
+
+        similar_packages = set([card.attrib['data-docid'] for card in tree.cssselect('.card')])
+        self.__pool.store_similar(package, similar_packages)
+
+    def run(self):
+        while True:
+            next_elem = self.__pool.get_elem()
+            print("%s: Querying %s" % (self.exitnode(), next_elem))
+            self.similar(next_elem)
+
+class Request(gp.TorPool):
 
     def __init__(self, graphfile):
 
-        self.__headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
-
         self.__graph = nx.DiGraph()
         self.__graphfile = graphfile
-        self.__session = requests.Session()
+        self.__graphlock = threading.Lock()
+        self.__queue = Queue.Queue()
+
+    def get_elem(self):
+        return self.__queue.get()
 
     def bootstrap(self, infile):
         print ("Bootstrapping graph from %s" % (infile))
@@ -30,6 +66,7 @@ class Request:
         print ("Read %d nodes" % (nx.number_of_nodes(self.__graph)))
 
     def write(self):
+        self.__graphlock.acquire()
         print ("Writing graph to %s" % (self.__graphfile))
         nx.write_adjlist(self.__graph, self.__graphfile)
         print ("Wrote %d nodes" % (nx.number_of_nodes(self.__graph)))
@@ -49,60 +86,31 @@ class Request:
         print ("Writing GraphML graph to %s" % (outfile))
         graphml.write_graphml(self.__graph, outfile)
 
-    def request(self, url):
+    def store_similar(self, package, similar_packages):
 
-        while True:
-            try:
-                return self.__session.get(url, headers=self.__headers)
-            except KeyboardInterrupt: raise
-            except:
-                time.sleep(1)
-
-    def similar(self, package):
-
-        page = self.request('https://play.google.com/store/apps/details?id=%s' % (package))
-        tree = html.fromstring(page.content)
-        more = tree.cssselect('.see-more')
-        if not more:
-            print("No results")
-            return
-
-        moreurl = more[0].attrib['href']
-        page = self.request('https://play.google.com/%s' % (moreurl))
-        tree = html.fromstring(page.content)
-
-        similar_packages = set([card.attrib['data-docid'] for card in tree.cssselect('.card')])
+        self.__graphlock.acquire()
         nodes_before = nx.number_of_nodes(self.__graph)
         for similar_package in similar_packages:
             self.__graph.add_edge(package, similar_package)
         nodes_after = nx.number_of_nodes(self.__graph)
+        self.__graphlock.release()
+
         new_nodes = nodes_after - nodes_before
         if new_nodes > 0:
             print(">>> %d new related packages, %d related packages, now at %d" % (new_nodes, len(similar_packages), nodes_after))
 
-    def extend (self):
+    def enqueue(self):
 
         all_nodes = nx.nodes(self.__graph)
-
-        last_checkpoint = time.time()
-        pkg_curr = 1
-        pkg_last = len(all_nodes)
-
-        print ("Extending, %d nodes" % (pkg_last))
-
         for node in all_nodes:
+
             # Skip nodes which already have similar packages
             if len(self.__graph.edges(nbunch=[node])) > 0:
                 continue
-            print('%d/%d (%2.1f%%), quering %s' % (pkg_curr, pkg_last, 100.0 * pkg_curr / pkg_last, node))
-            pkg_curr += 1
-            self.similar(node)
 
-            # Write checkpoint every hour. FIXME: Make configurable
-            if last_checkpoint + 3600 < time.time():
-                print('CHECKPOINTING...')
-                self.write()
-                last_checkpoint = time.time()
+            self.__queue.put(node)
+
+        print ("Extending, %d nodes" % (len(all_nodes)))
 
 def main():
 
@@ -120,6 +128,8 @@ def main():
     else:
         r.read()
 
+    r.enqueue()
+
     if args.gexf:
         r.write_gexf(args.gexf)
 
@@ -133,9 +143,10 @@ def main():
         sys.exit(0)
 
     try:
-        r.extend()
+        r.start(Extend)
     finally:
         r.write()
+        sys.exit(0)
 
 if __name__ == '__main__':
     main()
