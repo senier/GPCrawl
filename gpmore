@@ -47,6 +47,26 @@ class Extend(gp.Worker):
             if not self.similar(next_elem):
                 self.__pool.put_elem(next_elem)
 
+class Stats(threading.Thread):
+
+    def __init__(self, pool):
+
+        # Initialize threading
+        threading.Thread.__init__(self)
+
+        self.__pool = pool
+
+    def run(self):
+
+        last_packages = 0
+
+        while True:
+            current_packages = nx.number_of_nodes(self.__pool.graph())
+            new_packages =  current_packages - last_packages
+            print("...... %d packages, %d new, %d per min" % (current_packages, new_packages, new_packages * 6))
+            last_packages = current_packages
+            time.sleep(10)
+
 class Request(gp.TorPool):
 
     def __init__(self, graphfile):
@@ -55,6 +75,9 @@ class Request(gp.TorPool):
         self.__graphfile = graphfile
         self.__graphlock = threading.Lock()
         self.__queue = Queue.Queue()
+
+    def graph(self):
+        return self.__graph
 
     def get_elem(self):
         return self.__queue.get()
@@ -97,15 +120,9 @@ class Request(gp.TorPool):
     def store_similar(self, package, similar_packages):
 
         self.__graphlock.acquire()
-        nodes_before = nx.number_of_nodes(self.__graph)
         for similar_package in similar_packages:
             self.__graph.add_edge(package, similar_package)
-        nodes_after = nx.number_of_nodes(self.__graph)
         self.__graphlock.release()
-
-        new_nodes = nodes_after - nodes_before
-        if new_nodes > 0:
-            print("...... %d packages, %d new, %d related" % (nodes_after, new_nodes, len(similar_packages)))
 
     def enqueue(self):
 
@@ -151,7 +168,9 @@ def main():
         sys.exit(0)
 
     try:
-        r.start(Extend)
+        r.start(Extend, Stats)
+    except Exception as e:
+        print(str(e))
     finally:
         r.write()
         sys.exit(0)

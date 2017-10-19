@@ -41,7 +41,7 @@ class Worker(threading.Thread):
 
 class TorPool:
 
-    def start(self, WorkerClass):
+    def start(self, WorkerClass, StatisticsClass = None):
 
         self.__circuit_attached = threading.Event()
         self.__circuit_id = None
@@ -71,6 +71,12 @@ class TorPool:
 
         print("%d exit nodes found" % (len(exit_nodes)))
 
+        # Start statistics thread
+        if StatisticsClass:
+            stats = StatisticsClass(self)
+            stats.deamon = True
+            stats.start()
+
         try:
             controller.add_event_listener(attach_stream, stem.control.EventType.STREAM)
             controller.set_conf('__LeaveStreamsUnattached', '1')  # leave stream management to us
@@ -97,12 +103,10 @@ class TorPool:
                 threads.append (thread)
 
                 # Wait for circuit to be attached
-                print("Waiting for circuit to be attached")
                 if not self.__circuit_attached.wait(10.0):
                     print("Attaching circuit timed out")
                     continue
 
-                print("Starting thread")
                 thread.start()
 
             for thread in threads:
