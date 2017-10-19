@@ -70,40 +70,40 @@ class TorPool:
                     self.__circuit_attached.set()
 
         threads = []
-        exit_nodes = [(desc.fingerprint, desc.observed_bandwidth) for desc in controller.get_server_descriptors() if desc.exit_policy.is_exiting_allowed()]
-        exit_nodes.sort(key=lambda tup: tup[1], reverse=True)
+        exit_nodes = [desc for desc in controller.get_server_descriptors() if desc.exit_policy.is_exiting_allowed()]
+        exit_nodes.sort(key=lambda desc: desc.observed_bandwidth, reverse=True)
 
         print("%d exit nodes found" % (len(exit_nodes)))
 
         # Start statistics thread
         if StatisticsClass:
             stats = StatisticsClass(self)
-            stats.deamon = True
+            stats.daemon = True
             stats.start()
 
         try:
             controller.add_event_listener(attach_stream, stem.control.EventType.STREAM)
             controller.set_conf('__LeaveStreamsUnattached', '1')  # leave stream management to us
 
-            for (exit_node, unused) in exit_nodes:
+            for exit_node in exit_nodes:
 
                 while True:
-                    entry_node = random.choice(exit_nodes[1:50])[0]
-                    if entry_node != exit_node: break
+                    entry_node = random.choice(exit_nodes[1:50])
+                    if entry_node.fingerprint != exit_node.fingerprint: break
 
-                print("%s: Attaching circuit" % (exit_node))
+                print("%s: Attaching circuit" % (exit_node.fingerprint))
                 self.__circuit_attached.clear()
 
                 try:
-                    self.__circuit_id = controller.new_circuit([entry_node, exit_node], await_build = True)
+                    self.__circuit_id = controller.new_circuit([entry_node.fingerprint, exit_node.fingerprint], await_build = True)
 
                 except stem.CircuitExtensionFailed as e:
-                    print("%s: !!! Creation failed: %s" % (exit_node, str(e)))
+                    print("%s: !!! Creation failed: %s" % (exit_node.fingerprint, str(e)))
                     continue
 
-                print("%s: Starting" % (exit_node))
+                print("%s: Starting" % (exit_node.fingerprint))
                 thread = WorkerClass(exit_node, self)
-                thread.deamon = True
+                thread.daemon = True
                 threads.append (thread)
 
                 # Wait for circuit to be attached
@@ -112,11 +112,14 @@ class TorPool:
                     continue
 
                 thread.start()
-		self.__num_threads += 1
+                self.__num_threads += 1
 
             for thread in threads:
                 thread.join()
 
+        except KeyboardInterrupt: raise
+        except Exception as e:
+            print(str(e))
         finally:
             controller.remove_event_listener(attach_stream)
             controller.reset_conf('__LeaveStreamsUnattached')

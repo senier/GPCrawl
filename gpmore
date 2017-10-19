@@ -9,17 +9,18 @@ import networkx as nx
 import argparse
 import threading
 import Queue
+import re
 
 import gp
 
 class Extend(gp.Worker):
 
     def __init__(self, exitnode, pool):
-        gp.Worker.__init__(self, exitnode, pool)
+        gp.Worker.__init__(self, exitnode.fingerprint, pool)
         self.__pool = pool
         self.__exitnode = exitnode
 
-        print ("%s: Performing test request" % (exitnode))
+        print ("%s: Performing test request" % (exitnode.fingerprint))
         unused = self.request('https://play.google.com/store/apps/details?id=com.whatsapp')
 
     def similar(self, package):
@@ -39,8 +40,14 @@ class Extend(gp.Worker):
             return False
         tree = html.fromstring(page.content)
 
+        clpmatch = re.search('\?clp=(.*)$', moreurl)
+        if not clpmatch:
+            clp = 'invalid'
+        else:
+            clp = clpmatch.group(1)
+
         similar_packages = set([card.attrib['data-docid'] for card in tree.cssselect('.card')])
-        self.__pool.store_attribs(package, exitnode = self.__exitnode)
+        self.__pool.store_attribs(package, exitnode = self.__exitnode, clp = clp)
         self.__pool.store_similar(package, similar_packages)
         return True
 
@@ -134,10 +141,10 @@ class Request(gp.TorPool):
         print ("Writing GraphML graph to %s" % (outfile))
         graphml.write_graphml(self.__graph, outfile)
 
-    def store_attribs(self, package, exitnode):
+    def store_attribs(self, package, exitnode, clp):
 
         self.__graphlock.acquire()
-        self.__graph.nodes[package].update({'exitnode': exitnode})
+        self.__graph.nodes[package].update({'fingerprint': exitnode.fingerprint, 'ipv4address': exitnode.address, 'clp': clp})
         self.__graphlock.release()
 
     def store_similar(self, package, similar_packages):
