@@ -32,8 +32,9 @@ class Worker(threading.Thread):
 
         while True:
             try:
-                return self.__session.get(url, headers = self.__headers, verify = True)
+                return self.__session.get(url, headers = self.__headers, verify = True, timeout = 5.0)
             except KeyboardInterrupt: raise
+            except requests.exceptions.Timeout: return None
             except Exception as e:
                 print(str(e))
                 time.sleep(1)
@@ -42,7 +43,8 @@ class TorPool:
 
     def start(self, WorkerClass):
 
-        self.circuit_id = None
+        self.__circuit_attached = threading.Event()
+        self.__circuit_id = None
 
         controller = stem.control.Controller.from_socket_file()
         controller.authenticate()
@@ -54,11 +56,14 @@ class TorPool:
             controller.close_stream(stream)
 
         def attach_stream(stream):
-
-            print("attach_stream circ=%s, stream=%s: " % (str(self.circuit_id), str(stream)))
             if stream.status == 'NEW':
-                controller.attach_stream(stream.id, self.circuit_id)
-                self.circuit_id = None
+                if not self.__circuit_id:
+                    return
+                try:
+                    controller.attach_stream(stream.id, self.__circuit_id)
+                finally:
+                    self.__circuit_id = None
+                    self.__circuit_attached.set()
 
         threads = []
         exit_nodes = [(desc.fingerprint, desc.observed_bandwidth) for desc in controller.get_server_descriptors() if desc.exit_policy.is_exiting_allowed()]
@@ -76,8 +81,12 @@ class TorPool:
                     entry_node = random.choice(exit_nodes[1:50])[0]
                     if entry_node != exit_node: break
 
+                print("%s: Attaching circuit" % (exit_node))
+                self.__circuit_attached.clear()
+
                 try:
-                    self.circuit_id = controller.new_circuit([entry_node, exit_node], await_build = True)
+                    self.__circuit_id = controller.new_circuit([entry_node, exit_node], await_build = True)
+
                 except stem.CircuitExtensionFailed as e:
                     print("%s: !!! Creation failed: %s" % (exit_node, str(e)))
                     continue
@@ -85,8 +94,16 @@ class TorPool:
                 print("%s: Starting" % (exit_node))
                 thread = WorkerClass(exit_node, self)
                 thread.deamon = True
-                thread.start()
                 threads.append (thread)
+
+                # Wait for circuit to be attached
+                print("Waiting for circuit to be attached")
+                if not self.__circuit_attached.wait(10.0):
+                    print("Attaching circuit timed out")
+                    continue
+
+                print("Starting thread")
+                thread.start()
 
             for thread in threads:
                 thread.join()

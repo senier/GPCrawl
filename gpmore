@@ -18,16 +18,19 @@ class Extend(gp.Worker):
         gp.Worker.__init__(self, exitnode, pool)
         self.__pool = pool
 
+        print ("%s: Performing test request" % (exitnode))
         unused = self.request('https://play.google.com/store/apps/details?id=com.whatsapp')
 
     def similar(self, package):
 
         page = self.request('https://play.google.com/store/apps/details?id=%s' % (package))
+        if not page:
+            return False
+
         tree = html.fromstring(page.content)
         more = tree.cssselect('.see-more')
         if not more:
-            print("%s: No results" % (self.exitnode()))
-            return
+            return False
 
         moreurl = more[0].attrib['href']
         page = self.request('https://play.google.com/%s' % (moreurl))
@@ -35,12 +38,14 @@ class Extend(gp.Worker):
 
         similar_packages = set([card.attrib['data-docid'] for card in tree.cssselect('.card')])
         self.__pool.store_similar(package, similar_packages)
+        return True
 
     def run(self):
         while True:
             next_elem = self.__pool.get_elem()
-            print("%s: Querying %s" % (self.exitnode(), next_elem))
-            self.similar(next_elem)
+            #print("%s: Querying %s" % (self.exitnode(), next_elem))
+            if not self.similar(next_elem):
+                self.__pool.put_elem(next_elem)
 
 class Request(gp.TorPool):
 
@@ -53,6 +58,9 @@ class Request(gp.TorPool):
 
     def get_elem(self):
         return self.__queue.get()
+
+    def put_elem(self, elem):
+        self.__queue.put(elem)
 
     def bootstrap(self, infile):
         print ("Bootstrapping graph from %s" % (infile))
@@ -97,7 +105,7 @@ class Request(gp.TorPool):
 
         new_nodes = nodes_after - nodes_before
         if new_nodes > 0:
-            print(">>> %d new related packages, %d related packages, now at %d" % (new_nodes, len(similar_packages), nodes_after))
+            print("...... %d packages, %d new, %d related" % (nodes_after, new_nodes, len(similar_packages)))
 
     def enqueue(self):
 
@@ -108,7 +116,7 @@ class Request(gp.TorPool):
             if len(self.__graph.edges(nbunch=[node])) > 0:
                 continue
 
-            self.__queue.put(node)
+            self.put_elem(node)
 
         print ("Extending, %d nodes" % (len(all_nodes)))
 
