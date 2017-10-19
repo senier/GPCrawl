@@ -34,6 +34,8 @@ class Extend(gp.Worker):
 
         moreurl = more[0].attrib['href']
         page = self.request('https://play.google.com/%s' % (moreurl))
+        if not page:
+            return False
         tree = html.fromstring(page.content)
 
         similar_packages = set([card.attrib['data-docid'] for card in tree.cssselect('.card')])
@@ -169,8 +171,7 @@ def main():
 
     try:
         r.start(Extend, Stats)
-    except Exception as e:
-        print(str(e))
+    except Exception as e: raise
     finally:
         r.write()
         sys.exit(0)
