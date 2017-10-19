@@ -17,6 +17,7 @@ class Extend(gp.Worker):
     def __init__(self, exitnode, pool):
         gp.Worker.__init__(self, exitnode, pool)
         self.__pool = pool
+        self.__exitnode = exitnode
 
         print ("%s: Performing test request" % (exitnode))
         unused = self.request('https://play.google.com/store/apps/details?id=com.whatsapp')
@@ -39,6 +40,7 @@ class Extend(gp.Worker):
         tree = html.fromstring(page.content)
 
         similar_packages = set([card.attrib['data-docid'] for card in tree.cssselect('.card')])
+        self.__pool.store_attribs(package, exitnode = self.__exitnode)
         self.__pool.store_similar(package, similar_packages)
         return True
 
@@ -101,19 +103,20 @@ class Request(gp.TorPool):
 
     def bootstrap(self, infile):
         print ("Bootstrapping graph from %s" % (infile))
-        with open(infile, 'r') as f:
-            for node in set([x.strip() for x in f.readlines()]):
-                self.__graph.add_node(node)
+        self.__graph = nx.read_adjlist(infile)
+        print ("Read %d nodes" % (nx.number_of_nodes(self.__graph)))
 
     def read(self):
-        print ("Reading graph from %s" % (self.__graphfile))
-        self.__graph = nx.read_adjlist(self.__graphfile)
+        import networkx.readwrite.gml as gml
+        print ("Reading GML graph from %s" % (self.__graphfile))
+        self.__graph = gml.read_gml(self.__graphfile)
         print ("Read %d nodes" % (nx.number_of_nodes(self.__graph)))
 
     def write(self):
+        import networkx.readwrite.gml as gml
         self.__graphlock.acquire()
         print ("Writing graph to %s" % (self.__graphfile))
-        nx.write_adjlist(self.__graph, self.__graphfile)
+        gml.write_gml(self.__graph, self.__graphfile)
         print ("Wrote %d nodes" % (nx.number_of_nodes(self.__graph)))
 
     def write_gexf(self, outfile):
@@ -130,6 +133,12 @@ class Request(gp.TorPool):
         import networkx.readwrite.graphml as graphml
         print ("Writing GraphML graph to %s" % (outfile))
         graphml.write_graphml(self.__graph, outfile)
+
+    def store_attribs(self, package, exitnode):
+
+        self.__graphlock.acquire()
+        self.__graph.nodes[package].update({'exitnode': exitnode})
+        self.__graphlock.release()
 
     def store_similar(self, package, similar_packages):
 
