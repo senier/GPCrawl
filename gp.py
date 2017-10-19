@@ -41,10 +41,14 @@ class Worker(threading.Thread):
 
 class TorPool:
 
+    def get_numthreads(self):
+	return self.__num_threads
+
     def start(self, WorkerClass, StatisticsClass = None):
 
         self.__circuit_attached = threading.Event()
         self.__circuit_id = None
+        self.__num_threads = 0
 
         controller = stem.control.Controller.from_socket_file()
         controller.authenticate()
@@ -108,6 +112,7 @@ class TorPool:
                     continue
 
                 thread.start()
+		self.__num_threads += 1
 
             for thread in threads:
                 thread.join()

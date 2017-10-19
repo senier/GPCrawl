@@ -46,6 +46,7 @@ class Extend(gp.Worker):
         while True:
             next_elem = self.__pool.get_elem()
             #print("%s: Querying %s" % (self.exitnode(), next_elem))
+            self.__pool.done_elem()
             if not self.similar(next_elem):
                 self.__pool.put_elem(next_elem)
 
@@ -61,11 +62,16 @@ class Stats(threading.Thread):
     def run(self):
 
         last_packages = 0
+        start_packages = nx.number_of_nodes(self.__pool.graph())
+        start_time = time.time()
 
         while True:
             current_packages = nx.number_of_nodes(self.__pool.graph())
             new_packages =  current_packages - last_packages
-            print("...... %d packages, %d new, %d per min" % (current_packages, new_packages, new_packages * 6))
+            since_start = current_packages - start_packages
+            run_time = (time.time() - start_time)/60
+
+            print("...... %d packages, %d since start (%2.1f per min), %d new, %d per min | queue: %d, threads: %d" % (current_packages, since_start, since_start/run_time, new_packages, new_packages * 6, self.__pool.get_queuelen(), self.__pool.get_numthreads()))
             last_packages = current_packages
             time.sleep(10)
 
@@ -81,8 +87,14 @@ class Request(gp.TorPool):
     def graph(self):
         return self.__graph
 
+    def get_queuelen(self):
+        return self.__queue.qsize()
+
     def get_elem(self):
         return self.__queue.get()
+
+    def done_elem(self):
+        return self.__queue.task_done()
 
     def put_elem(self, elem):
         self.__queue.put(elem)
