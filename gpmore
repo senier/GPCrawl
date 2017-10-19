@@ -138,13 +138,13 @@ class Request(gp.TorPool):
             self.__graph.add_edge(package, similar_package)
         self.__graphlock.release()
 
-    def enqueue(self):
+    def enqueue(self, rescan):
 
         all_nodes = nx.nodes(self.__graph)
         for node in all_nodes:
 
-            # Skip nodes which already have similar packages
-            if len(self.__graph.edges(nbunch=[node])) > 0:
+            # Skip nodes which already have similar packages, unless we rescan everything
+            if not rescan and len(self.__graph.edges(nbunch=[node])) > 0:
                 continue
 
             self.put_elem(node)
@@ -155,6 +155,7 @@ def main():
 
     parser = argparse.ArgumentParser(description = 'Play Store Website Crawler')
     parser.add_argument('-g', '--graph', action='store', required='True', help='Graph file')
+    parser.add_argument('-r', '--rescan', action='store_true', help='Rescan all nodes')
     parser.add_argument('-b', '--bootstrap', action='store', help='Bootstrap list')
     parser.add_argument('-E', '--gexf', action='store', help='Output to GEXF file')
     parser.add_argument('-M', '--gml', action='store', help='Output to GML file')
@@ -167,7 +168,7 @@ def main():
     else:
         r.read()
 
-    r.enqueue()
+    r.enqueue(args.rescan)
 
     if args.gexf:
         r.write_gexf(args.gexf)
