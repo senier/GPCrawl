@@ -47,8 +47,10 @@ class Extend(gp.Worker):
             clp = clpmatch.group(1)
 
         similar_packages = set([card.attrib['data-docid'] for card in tree.cssselect('.card')])
+        self.__pool.get_graph()
         self.__pool.store_attribs(package, exitnode = self.__exitnode, clp = clp)
         self.__pool.store_similar(package, similar_packages)
+        self.__pool.put_graph()
         return True
 
     def run(self):
@@ -107,6 +109,12 @@ class Request(gp.TorPool):
 
     def put_elem(self, elem):
         self.__queue.put(elem)
+
+    def get_graph(self):
+        self.__graphlock.acquire()
+
+    def put_graph(self):
+        self.__graphlock.release()
 
     def bootstrap(self, infile):
         print ("Bootstrapping graph from %s" % (infile))
@@ -169,16 +177,12 @@ class Request(gp.TorPool):
 
     def store_attribs(self, package, exitnode, clp):
 
-        self.__graphlock.acquire()
         self.__graph.nodes[package].update({'fingerprint': exitnode.fingerprint, 'ipv4address': exitnode.address, 'clp': clp})
-        self.__graphlock.release()
 
     def store_similar(self, package, similar_packages):
 
-        self.__graphlock.acquire()
         for similar_package in similar_packages:
             self.__graph.add_edge(package, similar_package)
-        self.__graphlock.release()
 
     def enqueue(self, rescan):
 
