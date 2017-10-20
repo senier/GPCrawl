@@ -186,6 +186,8 @@ class Request(gp.TorPool):
     def store_similar(self, package, similar_packages):
 
         for similar_package in similar_packages:
+            if not similar_package in self.__graph.nodes:
+                self.put_elem(similar_package)
             self.__graph.add_edge(package, similar_package)
 
     def enqueue(self, rescan):
