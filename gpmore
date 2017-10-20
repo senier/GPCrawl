@@ -253,6 +253,6 @@ def main():
 
 if __name__ == '__main__':
 
-    for sig in (SIGABRT, SIGINT, SIGTERM, SIGHUP, SIGUSR1, SIGUSR2):
+    for sig in (SIGABRT, SIGTERM, SIGHUP, SIGUSR1, SIGUSR2):
         signal(sig, cleanup)
     main()
