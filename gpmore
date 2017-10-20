@@ -23,7 +23,10 @@ class Extend(gp.Worker):
         self.__exitnode = exitnode
 
         print ("%s: Performing test request" % (exitnode.fingerprint))
-        unused = self.request('https://play.google.com/store/apps/details?id=com.whatsapp')
+        try:
+            unused = self.request('https://play.google.com/store/apps/details?id=com.whatsapp', sleep = False)
+        except KeyboardInterrupt: raise
+        except: pass
 
     def similar(self, package):
 
@@ -60,9 +63,9 @@ class Extend(gp.Worker):
     def run(self):
         while True:
             next_elem = self.__pool.get_elem()
-            #print("%s: Querying %s" % (self.exitnode(), next_elem))
             self.__pool.done_elem()
-            if not self.similar(next_elem):
+            similar = self.similar(next_elem)
+            if not similar:
                 self.__pool.put_elem(next_elem)
 
 class Stats(threading.Thread):

@@ -19,7 +19,7 @@ class Worker(threading.Thread):
         self.__exitnode = exitnode
         self.__pool     = pool
 
-        self.__session.proxies = {
+        self.__proxies = {
             'http':  'socks5h://USER-%s-XXX:password@localhost:9050' % (exitnode),
             'https': 'socks5h://USER-%s-YYY:password@localhost:9050' % (exitnode)}
 
@@ -28,15 +28,17 @@ class Worker(threading.Thread):
     def exitnode(self):
         return self.__exitnode
 
-    def request(self, url):
+    def request(self, url, sleep = True):
 
         while True:
             try:
-                return self.__session.get(url, headers = self.__headers, verify = True, timeout = 5.0)
+                return self.__session.get(url, headers = self.__headers, proxies = self.__proxies, verify = True, timeout = 5.0)
             except KeyboardInterrupt: raise
-            except requests.exceptions.Timeout: return None
+            except requests.exceptions.Timeout:
+                if not sleep: return
+                time.sleep(120)
             except Exception as e:
-                print(str(e))
+                print("request: " + str(e))
                 time.sleep(1)
 
 class TorPool:
