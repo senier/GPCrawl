@@ -65,6 +65,8 @@ class TorPool:
                     return
                 try:
                     controller.attach_stream(stream.id, self.__circuit_id)
+                except Exception as e:
+                    print("Attach stream: " + str(e))
                 finally:
                     self.__circuit_id = None
                     self.__circuit_attached.set()
@@ -119,7 +121,7 @@ class TorPool:
 
         except KeyboardInterrupt: raise
         except Exception as e:
-            print(str(e))
+            print("start: " + str(e))
         finally:
             controller.remove_event_listener(attach_stream)
             controller.reset_conf('__LeaveStreamsUnattached')
