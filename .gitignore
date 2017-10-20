@@ -8,3 +8,5 @@ download
 packages.txt*
 *.adjl
 *.gml
+*.list
+*.meta

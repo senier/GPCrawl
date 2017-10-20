@@ -110,36 +110,62 @@ class Request(gp.TorPool):
 
     def bootstrap(self, infile):
         print ("Bootstrapping graph from %s" % (infile))
+        self.__graphlock.acquire()
         self.__graph = nx.read_adjlist(infile)
+        self.__graphlock.release()
         print ("Read %d nodes" % (nx.number_of_nodes(self.__graph)))
 
     def read(self):
-        import networkx.readwrite.gml as gml
-        print ("Reading GML graph from %s" % (self.__graphfile))
-        self.__graph = gml.read_gml(self.__graphfile)
+
+        print ("Reading graph from %s" % (self.__graphfile))
+        self.__graphlock.acquire()
+
+        self.__graph = nx.read_adjlist(self.__graphfile + ".adjl")
+
+        with open(self.__graphfile + ".meta", 'r') as meta:
+            for line in meta:
+                (package, fingerprint, address, clp) = line.split()
+                self.__graph.nodes[package].update({'fingerprint': fingerprint, 'ipv4address': address, 'clp': clp})
+
+        self.__graphlock.release()
         print ("Read %d nodes" % (nx.number_of_nodes(self.__graph)))
 
     def write(self):
-        import networkx.readwrite.gml as gml
-        self.__graphlock.acquire()
+
         print ("Writing graph to %s" % (self.__graphfile))
-        gml.write_gml(self.__graph, self.__graphfile)
+        self.__graphlock.acquire()
+
+        nx.write_adjlist(self.__graph, self.__graphfile + ".adjl")
+
+        with open(self.__graphfile + ".meta", 'w') as meta:
+            for package in self.__graph.nodes:
+                p = self.__graph.nodes[package]
+                if 'fingerprint' in p:
+                    meta.write("%s %s %s %s\n" % (package, p['fingerprint'], p['ipv4address'], p['clp']))
+
+        self.__graphlock.release()
         print ("Wrote %d nodes" % (nx.number_of_nodes(self.__graph)))
 
     def write_gexf(self, outfile):
         import networkx.readwrite.gexf as gexf
         print ("Writing GEXT graph to %s" % (outfile))
+        self.__graphlock.acquire()
         gexf.write_gexf(self.__graph, outfile)
+        self.__graphlock.release()
 
     def write_gml(self, outfile):
         import networkx.readwrite.gml as gml
         print ("Writing GML graph to %s" % (outfile))
+        self.__graphlock.acquire()
         gml.write_gml(self.__graph, outfile)
+        self.__graphlock.release()
 
     def write_graphml(self, outfile):
         import networkx.readwrite.graphml as graphml
         print ("Writing GraphML graph to %s" % (outfile))
+        self.__graphlock.acquire()
         graphml.write_graphml(self.__graph, outfile)
+        self.__graphlock.release()
 
     def store_attribs(self, package, exitnode, clp):
 
@@ -179,6 +205,7 @@ def main():
     args = parser.parse_args()
 
     r = Request(args.graph)
+
     if args.bootstrap:
         r.bootstrap(args.bootstrap)
     else:
