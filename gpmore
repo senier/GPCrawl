@@ -11,6 +11,8 @@ import threading
 import Queue
 import re
 
+from signal import *
+
 import gp
 
 class Extend(gp.Worker):
@@ -199,7 +201,18 @@ class Request(gp.TorPool):
 
         print ("Extending, %d nodes" % (len(all_nodes)))
 
+r = None
+
+def cleanup(*args):
+    global r
+    print("Aborting, cleaning up.")
+    r.write()
+    print("Done.")
+    sys._exit(1)
+
 def main():
+
+    global r
 
     parser = argparse.ArgumentParser(description = 'Play Store Website Crawler')
     parser.add_argument('-g', '--graph', action='store', required='True', help='Graph file')
@@ -236,7 +249,10 @@ def main():
     except Exception as e: raise
     finally:
         r.write()
-        sys.exit(0)
+        sys.exit(1)
 
 if __name__ == '__main__':
+
+    for sig in (SIGABRT, SIGINT, SIGTERM, SIGHUP, SIGUSR1, SIGUSR2):
+        signal(sig, cleanup)
     main()
