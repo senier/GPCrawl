@@ -192,7 +192,7 @@ class Request(gp.TorPool):
         for node in all_nodes:
 
             # Skip nodes which already have similar packages, unless we rescan everything
-            if not rescan and len(self.__graph.edges(nbunch=[node])) > 0:
+            if not rescan and 'fingerprint' in self.__graph.nodes[node]:
                 continue
 
             self.put_elem(node)
