@@ -35,10 +35,6 @@ class Extend(gp.Worker):
             return False
 
         moreurl = more[0].attrib['href']
-        page = self.request('https://play.google.com/%s' % (moreurl))
-        if not page:
-            return False
-        tree = html.fromstring(page.content)
 
         clpmatch = re.search('\?clp=(.*)$', moreurl)
         if not clpmatch:
@@ -46,7 +42,13 @@ class Extend(gp.Worker):
         else:
             clp = clpmatch.group(1)
 
-        similar_packages = set([card.attrib['data-docid'] for card in tree.cssselect('.card')])
+        page = self.request('https://play.google.com/%s' % (moreurl))
+        if page:
+            tree = html.fromstring(page.content)
+            similar_packages = set([card.attrib['data-docid'] for card in tree.cssselect('.card')])
+        else:
+            similar_packages = set([])
+
         self.__pool.get_graph()
         self.__pool.store_attribs(package, exitnode = self.__exitnode, clp = clp)
         self.__pool.store_similar(package, similar_packages)
