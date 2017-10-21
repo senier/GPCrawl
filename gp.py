@@ -103,7 +103,8 @@ class TorPool:
                 try:
                     self.__circuit_id = controller.new_circuit([entry_node.fingerprint, exit_node.fingerprint], await_build = True)
 
-                except stem.CircuitExtensionFailed as e:
+                except KeyboardInterrupt: raise
+                except Exception as e:
                     print("%s: !!! Creation failed: %s" % (exit_node.fingerprint, str(e)))
                     continue
 
@@ -131,4 +132,5 @@ class TorPool:
             controller.reset_conf('__LeaveStreamsUnattached')
 
 if __name__ == '__main__':
-    main()
+    while True:
+        main()
