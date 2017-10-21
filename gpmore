@@ -82,6 +82,7 @@ class Stats(threading.Thread):
         last_packages = 0
         start_packages = nx.number_of_nodes(self.__pool.graph())
         start_time = time.time()
+        last_checkpoint = start_time
 
         while True:
             current_packages = nx.number_of_nodes(self.__pool.graph())
@@ -91,6 +92,12 @@ class Stats(threading.Thread):
 
             print("...... %d packages, %d since start (%2.1f per min), %d new, %d per min | queue: %d, threads: %d" % (current_packages, since_start, since_start/run_time, new_packages, new_packages * 6, self.__pool.get_queuelen(), self.__pool.get_numthreads()))
             last_packages = current_packages
+
+            if time.time() - last_checkpoint > 3600:
+                print("Checkpointing...")
+                self.__pool.write()
+                last_checkpoint = time.time()
+
             time.sleep(10)
 
 class Request(gp.TorPool):
