@@ -74,6 +74,10 @@ class TorPool:
                     self.__circuit_attached.set()
 
         threads = []
+
+        guard_nodes = [desc for desc in controller.get_server_descriptors() if not desc.exit_policy.is_exiting_allowed()]
+        guard_nodes.sort(key=lambda desc: desc.observed_bandwidth, reverse=True)
+
         exit_nodes = [desc for desc in controller.get_server_descriptors() if desc.exit_policy.is_exiting_allowed()]
         exit_nodes.sort(key=lambda desc: desc.observed_bandwidth, reverse=True)
 
@@ -91,9 +95,7 @@ class TorPool:
 
             for exit_node in exit_nodes:
 
-                while True:
-                    entry_node = random.choice(exit_nodes[1:50])
-                    if entry_node.fingerprint != exit_node.fingerprint: break
+                entry_node = random.choice(guard_nodes[1:50])
 
                 print("%s: Attaching circuit" % (exit_node.fingerprint))
                 self.__circuit_attached.clear()
