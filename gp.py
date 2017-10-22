@@ -33,7 +33,7 @@ class Worker(threading.Thread):
 
         while True:
             try:
-                return self.__session.get(url, headers = self.__headers, proxies = self.__proxies, verify = True, timeout = 5.0)
+                return self.__session.get(url, headers = self.__headers, proxies = self.__proxies, verify = True, timeout = 10.0)
             except KeyboardInterrupt: raise
             except requests.exceptions.Timeout:
                 if not sleep: return
