@@ -4,6 +4,7 @@ import sys
 import requests
 from lxml import html
 import stem.control
+import stem.descriptor.remote
 import threading
 import time
 import random
@@ -55,6 +56,12 @@ class TorPool:
         controller = stem.control.Controller.from_socket_file()
         controller.authenticate()
 
+        controller.set_conf('CircuitBuildTimeout', '10')
+        controller.set_conf('CircuitIdleTimeout', '60')
+        controller.set_conf('CircuitStreamTimeout', '9999999')
+        controller.set_conf('NewCircuitPeriod', '9999999')
+        controller.set_conf('MaxClientCircuitsPending', '1')
+
         for circuit in controller.get_circuits():
             controller.close_circuit(circuit.id)
 
@@ -75,10 +82,12 @@ class TorPool:
 
         threads = []
 
-        guard_nodes = [desc for desc in controller.get_server_descriptors() if not desc.exit_policy.is_exiting_allowed()]
+        self.__server_descriptors = stem.descriptor.remote.get_server_descriptors()
+
+        guard_nodes = [desc for desc in self.__server_descriptors if not desc.exit_policy.is_exiting_allowed()]
         guard_nodes.sort(key=lambda desc: desc.observed_bandwidth, reverse=True)
 
-        exit_nodes = [desc for desc in controller.get_server_descriptors() if desc.exit_policy.is_exiting_allowed()]
+        exit_nodes = [desc for desc in self.__server_descriptors if desc.exit_policy.is_exiting_allowed()]
         exit_nodes.sort(key=lambda desc: desc.observed_bandwidth, reverse=True)
 
         print("%d exit nodes found" % (len(exit_nodes)))
