@@ -262,7 +262,9 @@ def main():
 
     try:
         r.start(Extend, Stats)
-    except Exception as e: raise
+    except Exception as e:
+        print("main: %s" % (str(e)))
+        raise
     finally:
         r.write()
         sys.exit(1)
