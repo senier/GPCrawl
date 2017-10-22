@@ -35,21 +35,25 @@ class Extend(gp.Worker):
             return False
 
         tree = html.fromstring(page.content)
-        more = tree.cssselect('.see-more')
+        more = tree.xpath(".//a[text()='Similar']")
         if not more:
             return False
 
         moreurl = more[0].attrib['href']
 
-        clpmatch = re.search('\?clp=(.*)$', moreurl)
-        if not clpmatch:
-            clp = 'invalid'
+        if moreurl:
+            clpmatch = re.search('\?clp=(.*)$', moreurl)
+            if not clpmatch:
+                clp = 'invalid:' + moreurl
+            else:
+                clp = clpmatch.group(1)
         else:
-            clp = clpmatch.group(1)
+            clp = 'none'
 
         page = self.request('https://play.google.com/%s' % (moreurl))
         if page:
             tree = html.fromstring(page.content)
+            # FIXME: Use xpath to select cards
             similar_packages = set([card.attrib['data-docid'] for card in tree.cssselect('.card')])
         else:
             similar_packages = set([])
