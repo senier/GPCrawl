@@ -35,12 +35,15 @@ class Extend(gp.Worker):
             return False
 
         tree = html.fromstring(page.content)
+
+        # Get similar apps
         more = tree.xpath(".//a[text()='Similar']")
         if not more:
             return False
 
         moreurl = more[0].attrib['href']
 
+        # Get clp= value
         if moreurl:
             clpmatch = re.search('\?clp=(.*)$', moreurl)
             if not clpmatch:
@@ -49,6 +52,19 @@ class Extend(gp.Worker):
                 clp = clpmatch.group(1)
         else:
             clp = 'none'
+
+        # Get category
+        cat = tree.cssselect('.category')
+        if cat:
+            caturl = cat[0].attrib['href']
+            catmatch = re.search('\/store\/apps\/category\/(.*)', caturl)
+            if catmatch:
+                category = catmatch.group(1)
+            else:
+                category = 'CAT_INVALID:%s' % (caturl)
+        else:
+            category = 'CAT_NONE'
+
 
         page = self.request('https://play.google.com/%s' % (moreurl))
         if page:
@@ -59,7 +75,7 @@ class Extend(gp.Worker):
             similar_packages = set([])
 
         self.__pool.get_graph()
-        self.__pool.store_attribs(package, exitnode = self.__exitnode, clp = clp)
+        self.__pool.store_attribs(package, exitnode = self.__exitnode, clp = clp, category = category)
         self.__pool.store_similar(package, similar_packages)
         self.__pool.put_graph()
         return True
@@ -150,8 +166,8 @@ class Request(gp.TorPool):
 
         with open(self.__graphfile + ".meta", 'r') as meta:
             for line in meta:
-                (package, fingerprint, address, clp) = line.split()
-                self.__graph.nodes[package].update({'fingerprint': fingerprint, 'ipv4address': address, 'clp': clp})
+                (package, fingerprint, address, clp, category) = line.split()
+                self.__graph.nodes[package].update({'fingerprint': fingerprint, 'ipv4address': address, 'clp': clp, 'category': category})
 
         self.__graphlock.release()
         print ("Read %d nodes" % (nx.number_of_nodes(self.__graph)))
@@ -167,7 +183,7 @@ class Request(gp.TorPool):
             for package in self.__graph.nodes:
                 p = self.__graph.nodes[package]
                 if 'fingerprint' in p:
-                    meta.write("%s %s %s %s\n" % (package, p['fingerprint'], p['ipv4address'], p['clp']))
+                    meta.write("%s %s %s %s %s\n" % (package, p['fingerprint'], p['ipv4address'], p['clp'], p['category']))
 
         self.__graphlock.release()
         print ("Wrote %d nodes" % (nx.number_of_nodes(self.__graph)))
@@ -193,9 +209,9 @@ class Request(gp.TorPool):
         graphml.write_graphml(self.__graph, outfile)
         self.__graphlock.release()
 
-    def store_attribs(self, package, exitnode, clp):
+    def store_attribs(self, package, exitnode, clp, category):
 
-        self.__graph.nodes[package].update({'fingerprint': exitnode.fingerprint, 'ipv4address': exitnode.address, 'clp': clp})
+        self.__graph.nodes[package].update({'fingerprint': exitnode.fingerprint, 'ipv4address': exitnode.address, 'clp': clp, 'category': category})
 
     def store_similar(self, package, similar_packages):
 
