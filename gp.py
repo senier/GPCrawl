@@ -63,10 +63,14 @@ class TorPool:
         controller.set_conf('MaxClientCircuitsPending', '1')
 
         for circuit in controller.get_circuits():
-            controller.close_circuit(circuit.id)
+            try:
+                controller.close_circuit(circuit.id)
+            except: pass
 
         for stream in controller.get_streams():
-            controller.close_stream(stream)
+            try:
+                controller.close_stream(stream)
+            except: pass
 
         def attach_stream(stream):
             if stream.status == 'NEW':
