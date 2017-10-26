@@ -222,13 +222,11 @@ class Request(gp.TorPool):
 
     def enqueue(self, rescan):
 
-        all_nodes = nx.nodes(self.__graph)
+        # Skip nodes which already have similar packages, unless we rescan everything
+        all_nodes = [node for node in nx.nodes(self.__graph) if rescan or not 'fingerprint' in self.__graph.nodes[node]]
+        shuffle(all_nodes)
+
         for node in all_nodes:
-
-            # Skip nodes which already have similar packages, unless we rescan everything
-            if not rescan and 'fingerprint' in self.__graph.nodes[node]:
-                continue
-
             self.put_elem(node)
 
         print ("Extending, %d nodes" % (len(all_nodes)))
