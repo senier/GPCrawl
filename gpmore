@@ -113,7 +113,8 @@ class Stats(threading.Thread):
             print("...... %d packages, %d since start (%2.1f per min), %d new, %d per min | queue: %d, threads: %d" % (current_packages, since_start, since_start/run_time, new_packages, new_packages * 6, self.__pool.get_queuelen(), self.__pool.get_numthreads()))
             last_packages = current_packages
 
-            if time.time() - last_checkpoint > 3600:
+            # Write checkpoint every 2 hours
+            if time.time() - last_checkpoint > 2 * 60 * 60:
                 print("Checkpointing...")
                 self.__pool.write()
                 last_checkpoint = time.time()

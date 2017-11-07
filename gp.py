@@ -33,7 +33,7 @@ class Worker(threading.Thread):
 
         while True:
             try:
-                return self.__session.get(url, headers = self.__headers, proxies = self.__proxies, verify = True, timeout = 10.0)
+                return self.__session.get(url, headers = self.__headers, proxies = self.__proxies, verify = True, timeout = 30.0)
             except KeyboardInterrupt: raise
             except requests.exceptions.Timeout:
                 if not sleep: return
@@ -106,7 +106,7 @@ class TorPool:
             controller.add_event_listener(attach_stream, stem.control.EventType.STREAM)
             controller.set_conf('__LeaveStreamsUnattached', '1')  # leave stream management to us
 
-            for exit_node in exit_nodes:
+            for exit_node in exit_nodes[:500]:
 
                 entry_node = random.choice(guard_nodes[1:50])
 
