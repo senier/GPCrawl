@@ -106,7 +106,7 @@ class TorPool:
             controller.add_event_listener(attach_stream, stem.control.EventType.STREAM)
             controller.set_conf('__LeaveStreamsUnattached', '1')  # leave stream management to us
 
-            for exit_node in exit_nodes[:500]:
+            for exit_node in exit_nodes:
 
                 entry_node = random.choice(guard_nodes[1:50])
 
@@ -133,6 +133,9 @@ class TorPool:
 
                 thread.start()
                 self.__num_threads += 1
+
+                # FIXME: Make maximum number of threads configurable
+                if self.__num_threads > 330: break
 
             for thread in threads:
                 thread.join()
