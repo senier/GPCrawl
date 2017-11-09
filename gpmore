@@ -83,11 +83,13 @@ class Extend(gp.Worker):
 
     def run(self):
         while True:
-            next_elem = self.__pool.get_elem()
-            self.__pool.done_elem()
-            similar = self.similar(next_elem)
-            if not similar:
-                self.__pool.put_elem(next_elem)
+            try:
+                next_elem = self.__pool.get_elem()
+                self.__pool.done_elem()
+                similar = self.similar(next_elem)
+                if not similar:
+                    self.__pool.put_elem(next_elem)
+            except: pass
 
 class Stats(threading.Thread):
 
