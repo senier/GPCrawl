@@ -186,6 +186,7 @@ class Request(gp.TorPool):
     def write(self):
 
         print ("Writing graph to %s" % (self.__graphfile))
+        self.prepare_write()
         self.get_graph()
 
         nx.write_adjlist(self.__graph, self.__graphfile + ".adjl")
@@ -197,6 +198,7 @@ class Request(gp.TorPool):
                     meta.write("%s %s %s %s %s\n" % (package, p['fingerprint'], p['ipv4address'], p['clp'], p['category']))
 
         self.put_graph()
+        self.finish_write()
         print ("Wrote %d nodes" % (nx.number_of_nodes(self.__graph)))
 
     def write_gexf(self, outfile):

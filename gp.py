@@ -53,23 +53,24 @@ class TorPool:
         self.__circuit_id = None
         self.__num_threads = 0
 
-        controller = stem.control.Controller.from_socket_file()
-        controller.authenticate()
+        self.__controller = stem.control.Controller.from_socket_file()
+        self.__controller.authenticate()
 
-        controller.set_conf('CircuitBuildTimeout', '10')
-        controller.set_conf('CircuitIdleTimeout', '60')
-        controller.set_conf('CircuitStreamTimeout', '9999999')
-        controller.set_conf('NewCircuitPeriod', '9999999')
-        controller.set_conf('MaxClientCircuitsPending', '1')
+        self.__controller.set_conf('SocksTimeout', '20')
+        self.__controller.set_conf('CircuitBuildTimeout', '10')
+        self.__controller.set_conf('CircuitIdleTimeout', '60')
+        self.__controller.set_conf('CircuitStreamTimeout', '9999999')
+        self.__controller.set_conf('NewCircuitPeriod', '9999999')
+        self.__controller.set_conf('MaxClientCircuitsPending', '1')
 
-        for circuit in controller.get_circuits():
+        for circuit in self.__controller.get_circuits():
             try:
-                controller.close_circuit(circuit.id)
+                self.__controller.close_circuit(circuit.id)
             except: pass
 
-        for stream in controller.get_streams():
+        for stream in self.__controller.get_streams():
             try:
-                controller.close_stream(stream)
+                self.__controller.close_stream(stream)
             except: pass
 
         def attach_stream(stream):
@@ -77,7 +78,7 @@ class TorPool:
                 if not self.__circuit_id:
                     return
                 try:
-                    controller.attach_stream(stream.id, self.__circuit_id)
+                    self.__controller.attach_stream(stream.id, self.__circuit_id)
                 except Exception as e:
                     print("Attach stream: " + str(e))
                 finally:
@@ -103,8 +104,8 @@ class TorPool:
             stats.start()
 
         try:
-            controller.add_event_listener(attach_stream, stem.control.EventType.STREAM)
-            controller.set_conf('__LeaveStreamsUnattached', '1')  # leave stream management to us
+            self.__controller.add_event_listener(attach_stream, stem.control.EventType.STREAM)
+            self.__controller.set_conf('__LeaveStreamsUnattached', '1')  # leave stream management to us
 
             for exit_node in exit_nodes:
 
@@ -114,7 +115,7 @@ class TorPool:
                 self.__circuit_attached.clear()
 
                 try:
-                    self.__circuit_id = controller.new_circuit([entry_node.fingerprint, exit_node.fingerprint], await_build = True)
+                    self.__circuit_id = self.__controller.new_circuit([entry_node.fingerprint, exit_node.fingerprint], await_build = True)
 
                 except KeyboardInterrupt: raise
                 except Exception as e:
@@ -144,8 +145,14 @@ class TorPool:
         except Exception as e:
             print("start: " + str(e))
         finally:
-            controller.remove_event_listener(attach_stream)
-            controller.reset_conf('__LeaveStreamsUnattached')
+            self.__controller.remove_event_listener(attach_stream)
+            self.__controller.reset_conf('__LeaveStreamsUnattached')
+
+    def prepare_write(self):
+        self.__controller.set_conf('SocksTimeout', '500')
+
+    def finish_write(self):
+        self.__controller.set_conf('SocksTimeout', '20')
 
 if __name__ == '__main__':
     while True:
