@@ -10,6 +10,7 @@ import argparse
 import threading
 import Queue
 import re
+from datetime import datetime
 
 from signal import *
 
@@ -100,9 +101,11 @@ class Stats(threading.Thread):
     def run(self):
 
         last_packages = 0
+        queue_last = 0
         start_packages = nx.number_of_nodes(self.__pool.graph())
         start_time = time.time()
         last_checkpoint = start_time
+        queue_start = self.__pool.get_queuelen()
 
         while True:
             current_packages = nx.number_of_nodes(self.__pool.graph())
@@ -110,8 +113,13 @@ class Stats(threading.Thread):
             since_start = current_packages - start_packages
             run_time = (time.time() - start_time)/60
 
-            print("...... %d packages, %d since start (%2.1f per min), %d new, %d per min | queue: %d, threads: %d" % (current_packages, since_start, since_start/run_time, new_packages, new_packages * 6, self.__pool.get_queuelen(), self.__pool.get_numthreads()))
+            queue_current = self.__pool.get_queuelen()
+            queue_done = queue_last - queue_current
+            queue_since_start = queue_start - queue_current
+
+            print("[%s] packages: %d, %d since start (%2.1f per min), %d new | queue: %d, %d done, %d since start (%2.1f per min) | threads: %d" % (str(datetime.now()), current_packages, since_start, since_start/run_time, new_packages, queue_current, queue_done, queue_since_start, queue_since_start/run_time, self.__pool.get_numthreads()))
             last_packages = current_packages
+            queue_last = queue_current
 
             # Write checkpoint every 2 hours
             if time.time() - last_checkpoint > 2 * 60 * 60:
