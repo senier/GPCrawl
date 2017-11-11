@@ -56,7 +56,7 @@ class TorPool:
         self.__controller = stem.control.Controller.from_socket_file()
         self.__controller.authenticate()
 
-        self.__controller.set_conf('SocksTimeout', '20')
+        self.__controller.set_conf('SocksTimeout', '60')
         self.__controller.set_conf('CircuitBuildTimeout', '10')
         self.__controller.set_conf('CircuitIdleTimeout', '60')
         self.__controller.set_conf('CircuitStreamTimeout', '9999999')
@@ -149,10 +149,10 @@ class TorPool:
             self.__controller.reset_conf('__LeaveStreamsUnattached')
 
     def prepare_write(self):
-        self.__controller.set_conf('SocksTimeout', '500')
+        pass
 
     def finish_write(self):
-        self.__controller.set_conf('SocksTimeout', '20')
+        pass
 
 if __name__ == '__main__':
     while True:
