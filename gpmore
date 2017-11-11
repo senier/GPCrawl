@@ -105,6 +105,7 @@ class Stats(threading.Thread):
 
         last_packages = 0
         queue_last = 0
+        nothing_done = 0
         start_packages = nx.number_of_nodes(self.__pool.graph())
         start_time = time.time()
         last_checkpoint = start_time
@@ -124,8 +125,10 @@ class Stats(threading.Thread):
             last_packages = current_packages
             queue_last = queue_current
 
-            # Write checkpoint every 2 hours
-            if time.time() - last_checkpoint > 2 * 60 * 60:
+            nothing_done = 0 if queue_done > 0 else nothing_done + 1
+
+            # Write checkpoint if nothing happend for 5 minuts or every 4 hours
+            if nothing_done > 30 or time.time() - last_checkpoint > 4 * 60 * 60:
                 print("Checkpointing...")
                 self.__pool.write()
                 last_checkpoint = time.time()
