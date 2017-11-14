@@ -1,0 +1,64 @@
+#!/usr/bin/env python
+
+import argparse
+import gp
+import networkx as nx
+
+class Graph:
+
+    def __init__(self, graphfile):
+
+        self.__graph = nx.DiGraph()
+        self.__graphfile = graphfile
+
+    def read(self):
+
+        print ("Reading graph from %s" % (self.__graphfile))
+
+        self.__graph = nx.read_adjlist(self.__graphfile + ".adjl")
+
+        with open(self.__graphfile + ".meta", 'r') as meta:
+            for line in meta:
+                (package, fingerprint, address, clp, category) = line.split()
+                self.__graph.nodes[package].update({'fingerprint': fingerprint, 'ipv4address': address, 'clp': clp, 'category': category})
+
+        print ("Read %d nodes" % (nx.number_of_nodes(self.__graph)))
+
+    def write_gexf(self, outfile):
+        import networkx.readwrite.gexf as gexf
+        print ("Writing GEXT graph to %s" % (outfile))
+        gexf.write_gexf(self.__graph, outfile)
+
+    def write_gml(self, outfile):
+        import networkx.readwrite.gml as gml
+        print ("Writing GML graph to %s" % (outfile))
+        gml.write_gml(self.__graph, outfile)
+
+    def write_graphml(self, outfile):
+        import networkx.readwrite.graphml as graphml
+        print ("Writing GraphML graph to %s" % (outfile))
+        graphml.write_graphml(self.__graph, outfile)
+
+def main():
+
+    parser = argparse.ArgumentParser(description = 'Graph converter')
+    parser.add_argument('-g', '--graph', action='store', required='True', help='Graph file')
+    parser.add_argument('-E', '--gexf', action='store', help='Output to GEXF file')
+    parser.add_argument('-M', '--gml', action='store', help='Output to GML file')
+    parser.add_argument('-R', '--graphml', action='store', help='Output to GraphML file')
+    args = parser.parse_args()
+
+    r = Graph(args.graph)
+    r.read()
+
+    if args.gexf:
+        r.write_gexf(args.gexf)
+
+    if args.gml:
+        r.write_gml(args.gml)
+
+    if args.graphml:
+        r.write_graphml(args.graphml)
+
+if __name__ == '__main__':
+    main()

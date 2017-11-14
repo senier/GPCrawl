@@ -206,27 +206,6 @@ class Request(gp.TorPool):
         self.finish_write()
         print ("Wrote %d nodes" % (nx.number_of_nodes(self.__graph)))
 
-    def write_gexf(self, outfile):
-        import networkx.readwrite.gexf as gexf
-        print ("Writing GEXT graph to %s" % (outfile))
-        self.get_graph()
-        gexf.write_gexf(self.__graph, outfile)
-        self.put_graph()
-
-    def write_gml(self, outfile):
-        import networkx.readwrite.gml as gml
-        print ("Writing GML graph to %s" % (outfile))
-        self.get_graph()
-        gml.write_gml(self.__graph, outfile)
-        self.put_graph()
-
-    def write_graphml(self, outfile):
-        import networkx.readwrite.graphml as graphml
-        print ("Writing GraphML graph to %s" % (outfile))
-        self.get_graph()
-        graphml.write_graphml(self.__graph, outfile)
-        self.put_graph()
-
     def store_attribs(self, package, exitnode, clp, category):
 
         self.__graph.nodes[package].update({'fingerprint': exitnode.fingerprint, 'ipv4address': exitnode.address, 'clp': clp, 'category': category})
@@ -266,9 +245,6 @@ def main():
     parser.add_argument('-g', '--graph', action='store', required='True', help='Graph file')
     parser.add_argument('-r', '--rescan', action='store_true', help='Rescan all nodes')
     parser.add_argument('-b', '--bootstrap', action='store', help='Bootstrap list')
-    parser.add_argument('-E', '--gexf', action='store', help='Output to GEXF file')
-    parser.add_argument('-M', '--gml', action='store', help='Output to GML file')
-    parser.add_argument('-R', '--graphml', action='store', help='Output to GraphML file')
     args = parser.parse_args()
 
     r = Request(args.graph)
@@ -279,18 +255,6 @@ def main():
         r.read()
 
     r.enqueue(args.rescan)
-
-    if args.gexf:
-        r.write_gexf(args.gexf)
-
-    if args.gml:
-        r.write_gml(args.gml)
-
-    if args.graphml:
-        r.write_graphml(args.graphml)
-
-    if args.gexf or args.gml or args.graphml:
-        sys.exit(0)
 
     try:
         r.start(Extend, Stats)
