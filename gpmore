@@ -78,18 +78,18 @@ class Extend(gp.Worker):
 
         self.__pool.get_graph()
         self.__pool.store_attribs(package, exitnode = self.__exitnode, clp = clp, category = category)
-        self.__pool.store_similar(package, similar_packages)
+        self.__pool.store_similar(package, similar_packages, self.exitnode)
         self.__pool.put_graph()
         return True
 
     def run(self):
         while True:
             try:
-                next_elem = self.__pool.get_elem()
+                next_elem = self.__pool.get_elem(self.exitnode)
                 self.__pool.done_elem()
                 similar = self.similar(next_elem)
                 if not similar:
-                    self.__pool.put_elem(next_elem)
+                    self.__pool.put_elem(next_elem, self.exitnode)
             except: pass
 
 class Stats(threading.Thread):
@@ -125,7 +125,7 @@ class Stats(threading.Thread):
             last_packages = current_packages
             queue_last = queue_current
 
-            nothing_done = 0 if queue_done > 0 else nothing_done + 1
+            nothing_done = 0 if queue_done != 0 else nothing_done + 1
 
             # Write checkpoint if nothing happend for 5 minuts or every 4 hours
             if nothing_done > 30 or time.time() - last_checkpoint > 4 * 60 * 60:
@@ -136,6 +136,44 @@ class Stats(threading.Thread):
 
             time.sleep(10)
 
+class Keyed_Queue:
+
+    def __init__(self):
+        self.__global_queue = Queue.Queue()
+        self.__local_queue  = {}
+
+    def get(self, key):
+
+        if not key in self.__local_queue or self.__local_queue[key].empty():
+            return self.__global_queue.get()
+
+        return self.__local_queue[key].get()
+
+    def put(self, data, key):
+
+        if not key:
+            self.__global_queue.put(data)
+            return
+
+        if not key in self.__local_queue:
+            self.__local_queue[key] = Queue.Queue()
+
+        self.__local_queue[key].put(data)
+
+    def task_done(self): pass
+
+    def queues(self):
+        return self.__local_queue.keys()
+
+    def qsize(self):
+
+        qsize = 0
+        for qname in self.__local_queue:
+            qsize += self.__local_queue[qname].qsize()
+        qsize += self.__global_queue.qsize()
+
+        return qsize
+
 class Request(gp.TorPool):
 
     def __init__(self, graphfile):
@@ -143,7 +181,8 @@ class Request(gp.TorPool):
         self.__graph = nx.DiGraph()
         self.__graphfile = graphfile
         self.__graphlock = threading.Lock()
-        self.__queue = Queue.Queue()
+
+        self.__queue = Keyed_Queue()
 
     def graph(self):
         return self.__graph
@@ -151,14 +190,17 @@ class Request(gp.TorPool):
     def get_queuelen(self):
         return self.__queue.qsize()
 
-    def get_elem(self):
-        return self.__queue.get()
+    def get_elem(self, exitnode):
+        return self.__queue.get(exitnode)
 
     def done_elem(self):
         return self.__queue.task_done()
 
-    def put_elem(self, elem):
-        self.__queue.put(elem)
+    def put_elem(self, elem, exitnode):
+        self.__queue.put(elem, exitnode)
+
+    def queues (self):
+        return self.__queue.queues()
 
     def get_graph(self):
         self.__graphlock.acquire()
@@ -205,16 +247,17 @@ class Request(gp.TorPool):
         self.put_graph()
         self.finish_write()
         print ("Wrote %d nodes" % (nx.number_of_nodes(self.__graph)))
+        print ("Using %d queues" % (len(self.queues())))
 
     def store_attribs(self, package, exitnode, clp, category):
 
         self.__graph.nodes[package].update({'fingerprint': exitnode.fingerprint, 'ipv4address': exitnode.address, 'clp': clp, 'category': category})
 
-    def store_similar(self, package, similar_packages):
+    def store_similar(self, package, similar_packages, exitnode):
 
         for similar_package in similar_packages:
             if not similar_package in self.__graph.nodes:
-                self.put_elem(similar_package)
+                self.put_elem(similar_package, exitnode)
             self.__graph.add_edge(package, similar_package)
 
     def enqueue(self, rescan):
@@ -224,8 +267,11 @@ class Request(gp.TorPool):
         shuffle(all_nodes)
 
         for node in all_nodes:
-            self.put_elem(node)
+            n = self.__graph.nodes[node]
+            fp = n['fingerprint'] if 'fingerprint' in n else None
+            self.put_elem(node, fp)
 
+        print ("Using %d queues" % (len(self.queues())))
         print ("Extending, %d nodes" % (len(all_nodes)))
 
 r = None
@@ -257,7 +303,7 @@ def main():
     r.enqueue(args.rescan)
 
     try:
-        r.start(Extend, Stats)
+        r.start(Extend, Stats, r.queues())
     except Exception as e:
         print("main: %s" % (str(e)))
         raise

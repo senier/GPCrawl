@@ -45,9 +45,9 @@ class Worker(threading.Thread):
 class TorPool:
 
     def get_numthreads(self):
-	return self.__num_threads
+        return self.__num_threads
 
-    def start(self, WorkerClass, StatisticsClass = None):
+    def start(self, WorkerClass, StatisticsClass = None, exitnodes = None):
 
         self.__circuit_attached = threading.Event()
         self.__circuit_id = None
@@ -92,7 +92,7 @@ class TorPool:
         guard_nodes = [desc for desc in self.__server_descriptors if not desc.exit_policy.is_exiting_allowed()]
         guard_nodes.sort(key=lambda desc: desc.observed_bandwidth, reverse=True)
 
-        exit_nodes = [desc for desc in self.__server_descriptors if desc.exit_policy.is_exiting_allowed()]
+        exit_nodes = [desc for desc in self.__server_descriptors if (not exitnodes or desc.fingerprint in exitnodes) and desc.exit_policy.is_exiting_allowed()]
         exit_nodes.sort(key=lambda desc: desc.observed_bandwidth, reverse=True)
 
         print("%d exit nodes found" % (len(exit_nodes)))
