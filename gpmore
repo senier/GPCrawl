@@ -144,10 +144,12 @@ class Keyed_Queue:
 
     def get(self, key):
 
-        if not key in self.__local_queue or self.__local_queue[key].empty():
+        if not key in self.__local_queue or not self.__local_queue[key]:
             return self.__global_queue.get()
 
-        return self.__local_queue[key].get()
+        result = random.choice(tuple(self.__local_queue[key]))
+        self.__local_queue[key].remove(result)
+        return result
 
     def put(self, data, key):
 
@@ -156,20 +158,20 @@ class Keyed_Queue:
             return
 
         if not key in self.__local_queue:
-            self.__local_queue[key] = Queue.Queue()
+            self.__local_queue[key] = set()
 
-        self.__local_queue[key].put(data)
+        self.__local_queue[key].add(data)
 
     def task_done(self): pass
 
     def queues(self):
-        return self.__local_queue.keys()
+        return list(self.__local_queue)
 
     def qsize(self):
 
         qsize = 0
         for qname in self.__local_queue:
-            qsize += self.__local_queue[qname].qsize()
+            qsize += len(self.__local_queue[qname])
         qsize += self.__global_queue.qsize()
 
         return qsize
@@ -256,8 +258,8 @@ class Request(gp.TorPool):
     def store_similar(self, package, similar_packages, exitnode):
 
         for similar_package in similar_packages:
-            if not similar_package in self.__graph.nodes:
-                self.put_elem(similar_package, exitnode)
+            #if not similar_package in self.__graph.nodes:
+            self.put_elem(similar_package, exitnode)
             self.__graph.add_edge(package, similar_package)
 
     def enqueue(self, rescan):
