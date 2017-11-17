@@ -213,7 +213,7 @@ class Request(gp.TorPool):
     def bootstrap(self, infile):
         print ("Bootstrapping graph from %s" % (infile))
         self.get_graph()
-        self.__graph = nx.read_adjlist(infile)
+        self.__graph = nx.read_adjlist(infile, create_using=nx.DiGraph())
         self.put_graph()
         print ("Read %d nodes" % (nx.number_of_nodes(self.__graph)))
 
@@ -222,7 +222,7 @@ class Request(gp.TorPool):
         print ("Reading graph from %s" % (self.__graphfile))
         self.get_graph()
 
-        self.__graph = nx.read_adjlist(self.__graphfile + ".adjl")
+        self.__graph = nx.read_adjlist(self.__graphfile + ".adjl", create_using=nx.DiGraph())
 
         with open(self.__graphfile + ".meta", 'r') as meta:
             for line in meta:
