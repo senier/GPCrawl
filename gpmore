@@ -170,7 +170,7 @@ class Keyed_Queue:
     def qsize(self):
 
         qsize = 0
-        for qname in self.__local_queue:
+        for qname in list(self.__local_queue):
             qsize += len(self.__local_queue[qname])
         qsize += self.__global_queue.qsize()
 
@@ -257,7 +257,7 @@ class Request(gp.TorPool):
 
     def store_similar(self, package, similar_packages, exitnode):
 
-        for similar_package in similar_packages:
+        for similar_package in list(similar_packages):
             #if not similar_package in self.__graph.nodes:
             self.put_elem(similar_package, exitnode)
             self.__graph.add_edge(package, similar_package)
