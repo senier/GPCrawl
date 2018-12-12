@@ -3,6 +3,7 @@
 import argparse
 import gp
 import networkx as nx
+import psycopg2
 
 class Graph:
 
@@ -39,6 +40,29 @@ class Graph:
         print ("Writing GraphML graph to %s" % (outfile))
         graphml.write_graphml(self.__graph, outfile)
 
+    def write_database(self, db, user):
+
+        querystring = '''
+            INSERT INTO apps (package, category, exitnode, ipv4address, clp) VALUES (%s, %s,%s,%s,%s)
+                ON CONFLICT (package)
+                    DO UPDATE SET
+                        apps.category    = category,
+                        apps.exitnode    = exitnode,
+                        apps.ipv4address = ipv4address,
+                        apps.clp         = clp
+        '''
+
+        conn = psycopg2.connect('dbname=%s user=%s' % (dbname, user))
+        cur = self.conn.cursor()
+
+        print ("Writing database %s" % (db))
+
+        g = self.__graph
+        for node in g.nodes:
+            n = g.nodes[node]
+            self.cur.execute(querystring, (node, n['category'], n['exitnode'], n['ipv4address'], n['clp']))
+        self.conn.commit()
+
 def main():
 
     parser = argparse.ArgumentParser(description = 'Graph converter')
@@ -46,6 +70,7 @@ def main():
     parser.add_argument('-E', '--gexf', action='store', help='Output to GEXF file')
     parser.add_argument('-M', '--gml', action='store', help='Output to GML file')
     parser.add_argument('-R', '--graphml', action='store', help='Output to GraphML file')
+    parser.add_argument('-D', '--database', action='store', help='Output to database (apps table)')
     args = parser.parse_args()
 
     r = Graph(args.graph)
@@ -59,6 +84,9 @@ def main():
 
     if args.graphml:
         r.write_graphml(args.graphml)
+
+    if args.database:
+        r.write_database(args.database)
 
 if __name__ == '__main__':
     main()
